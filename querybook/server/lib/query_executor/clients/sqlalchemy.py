@@ -1,4 +1,5 @@
 import sqlalchemy
+from sqlalchemy import event
 from sqlalchemy.engine import make_url
 
 from lib.query_executor.base_client import ClientBaseClass, CursorBaseClass
@@ -38,6 +39,15 @@ class SqlAlchemyClient(ClientBaseClass):
 class SqlAlchemyCursor(CursorBaseClass):
     def __init__(self, engine):
         self._connection = engine.connect()
+        self._notices = []
+        self._setup_notice_listener()
+
+    def _setup_notice_listener(self):
+        @event.listens_for(self._connection, "after_cursor_execute")
+        def capture_notices(conn, cursor, statement, parameters, context, executemany):
+            raw_conn = cursor.connection
+            if hasattr(raw_conn, "notices") and raw_conn.notices:
+                self._notices.extend(raw_conn.notices)
 
     def __del__(self):
         if self._connection:
@@ -64,3 +74,10 @@ class SqlAlchemyCursor(CursorBaseClass):
 
     def get_columns(self):
         return list(self._cursor.keys())
+
+    def get_logs(self):
+        if self._notices:
+            logs = "".join(self._notices)
+            self._notices.clear()
+            return logs
+        return ""
