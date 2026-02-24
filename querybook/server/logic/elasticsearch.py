@@ -599,6 +599,7 @@ def table_to_es(table, fields=None, session=None):
         "metastore_id": schema.metastore_id,
         "schema": schema_name,
         "name": table_name,
+        "type": table.type,
         "full_name": full_name,
         "full_name_ngram": full_name,
         "completion_name": get_completion_name,

@@ -190,11 +190,14 @@ export const DataTableViewOverview: React.FC<
             <KeyContentDisplayLink key={key} keyString={key} value={value} />
         ));
 
+    const isRoutine =
+        table.type === 'function' || table.type === 'procedure';
+
     const rawMetastoreInfoDOM = table.hive_metastore_description ? (
         <pre className="raw-metastore-info">
             <ShowMoreText
                 seeLess
-                length={200}
+                length={isRoutine ? 5000 : 200}
                 text={table.hive_metastore_description}
             />
         </pre>
@@ -238,11 +241,17 @@ export const DataTableViewOverview: React.FC<
         </DataTableViewOverviewSection>
     );
 
-    const hiveMetastoreSection = (
+    const sourceCodeSection = isRoutine && rawMetastoreInfoDOM ? (
+        <DataTableViewOverviewSection title="Source Code">
+            {rawMetastoreInfoDOM}
+        </DataTableViewOverviewSection>
+    ) : null;
+
+    const hiveMetastoreSection = !isRoutine ? (
         <DataTableViewOverviewSection title="Raw Metastore Info">
             {rawMetastoreInfoDOM}
         </DataTableViewOverviewSection>
-    );
+    ) : null;
 
     const sampleQueriesSection = (
         <DataTableViewOverviewSection title="Sample DataDocs">
@@ -283,16 +292,19 @@ export const DataTableViewOverview: React.FC<
     return (
         <div className="QuerybookTableViewOverview pb24">
             {warningSection}
+            {sourceCodeSection}
             {descriptionSection}
-            <TableInsightsSection
-                tableId={table.id}
-                onClick={onExampleFilter}
-            />
+            {!isRoutine && (
+                <TableInsightsSection
+                    tableId={table.id}
+                    onClick={onExampleFilter}
+                />
+            )}
             {detailsSection}
-            <TableStatsSection tableId={table.id} />
+            {!isRoutine && <TableStatsSection tableId={table.id} />}
             {hiveMetastoreSection}
             {metaSection}
-            {sampleQueriesSection}
+            {!isRoutine && sampleQueriesSection}
         </div>
     );
 };

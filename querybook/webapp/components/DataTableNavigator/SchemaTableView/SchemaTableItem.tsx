@@ -8,6 +8,7 @@ import { IconButton } from 'ui/Button/IconButton';
 import { InfinityScroll } from 'ui/InfinityScroll/InfinityScroll';
 import { OrderByButton } from 'ui/OrderByButton/OrderByButton';
 import { Title } from 'ui/Title/Title';
+import { AccentText } from 'ui/StyledText/StyledText';
 
 import type { ITableResultWithSelection } from '../DataTableNavigator';
 
@@ -27,6 +28,68 @@ const StyledItem = styled.div`
 const SchemaIconButton = styled(IconButton)`
     padding: 4px;
 `;
+
+const TypeSectionLabel = styled.div`
+    padding: 4px 8px 2px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+`;
+
+type TypeGroup = {
+    label: string;
+    icon: string;
+    items: ITableResultWithSelection[];
+};
+
+function groupTablesByType(
+    tables: ITableSearchResult[],
+    selectedTableId: number
+): TypeGroup[] {
+    if (!tables) {
+        return [];
+    }
+
+    const tablesGroup: ITableResultWithSelection[] = [];
+    const functionsGroup: ITableResultWithSelection[] = [];
+    const proceduresGroup: ITableResultWithSelection[] = [];
+
+    for (const table of tables) {
+        const item: ITableResultWithSelection = {
+            ...table,
+            selected: table.id === selectedTableId,
+            displayName: table.name,
+        };
+        if (table.type === 'function') {
+            functionsGroup.push(item);
+        } else if (table.type === 'procedure') {
+            proceduresGroup.push(item);
+        } else {
+            tablesGroup.push(item);
+        }
+    }
+
+    const groups: TypeGroup[] = [];
+    if (tablesGroup.length > 0) {
+        groups.push({ label: 'Tables', icon: 'Table', items: tablesGroup });
+    }
+    if (functionsGroup.length > 0) {
+        groups.push({
+            label: 'Functions',
+            icon: 'Code',
+            items: functionsGroup,
+        });
+    }
+    if (proceduresGroup.length > 0) {
+        groups.push({
+            label: 'Procedures',
+            icon: 'Settings',
+            items: proceduresGroup,
+        });
+    }
+
+    return groups;
+}
 
 function prepareSchemaNames(
     tables: ITableSearchResult[],
@@ -73,6 +136,11 @@ export const SchemaTableItem: React.FC<{
         () => prepareSchemaNames(tables, selectedTableId),
         [tables, selectedTableId]
     );
+    const typeGroups = useMemo(
+        () => groupTablesByType(tables, selectedTableId),
+        [tables, selectedTableId]
+    );
+    const hasMultipleTypes = typeGroups.length > 1;
 
     return (
         <div className="SchemaTableItem mb12">
@@ -112,6 +180,32 @@ export const SchemaTableItem: React.FC<{
                         <div className="empty-section-message">
                             No tables in {name}
                         </div>
+                    ) : hasMultipleTypes ? (
+                        <>
+                            {typeGroups.map((group) => (
+                                <div key={group.label} className="mb8">
+                                    <TypeSectionLabel>
+                                        <AccentText
+                                            size="xsmall"
+                                            weight="bold"
+                                            color="lightest"
+                                        >
+                                            {group.label}
+                                        </AccentText>
+                                    </TypeSectionLabel>
+                                    {group.items.map(tableRowRenderer)}
+                                </div>
+                            ))}
+                            <InfinityScroll
+                                elements={[]}
+                                onLoadMore={onLoadMore}
+                                hasMore={!total || total > data.length}
+                                itemRenderer={tableRowRenderer}
+                                itemHeight={TABLE_ITEM_HEIGHT}
+                                defaultListHeight={0}
+                                autoSizerStyles={{ height: '0px' }}
+                            />
+                        </>
                     ) : (
                         <InfinityScroll
                             elements={data}

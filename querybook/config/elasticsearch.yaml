@@ -206,6 +206,8 @@ tables:
                 name:
                     type: keyword
                     normalizer: case_insensitive
+                type:
+                    type: keyword
                 full_name:
                     type: text
                     analyzer: table_name_lowercase

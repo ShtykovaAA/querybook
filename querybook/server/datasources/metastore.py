@@ -58,10 +58,12 @@ def get_schema(schema_id, include_metastore=False, include_table=False):
 
 
 @register("/schema/<int:schema_id>/table/", methods=["GET"])
-def get_tables_from_schema(schema_id):
+def get_tables_from_schema(schema_id, table_type=None):
     with DBSession() as session:
         verify_data_schema_permission(schema_id, session=session)
-        return logic.get_table_by_schema_id(schema_id, session=session)
+        return logic.get_table_by_schema_id(
+            schema_id, table_type=table_type, session=session
+        )
 
 
 @register("/table/<int:table_id>/", methods=["GET"])

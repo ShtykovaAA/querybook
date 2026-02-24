@@ -14,6 +14,7 @@ export interface ITableSearchResult {
     id: number;
     schema: string;
     name: string;
+    type?: string;
     golden?: boolean;
 }
 
@@ -24,6 +25,7 @@ export interface ITableSearchFilters {
     endDate?: number;
     schema?: string;
     data_elements?: string[];
+    type?: string;
 }
 
 interface ISchemaTableSearch extends IDataSchema {

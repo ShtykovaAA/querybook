@@ -43,7 +43,7 @@ import { DataTableHeader } from './DataTableHeader';
 
 import './DataTableView.scss';
 
-const tabDefinitions = [
+const allTabDefinitions = [
     {
         name: 'Overview',
         key: 'overview',
@@ -85,6 +85,29 @@ const tabDefinitions = [
         elementType: ElementType.WARNINGS_TABLE_TAB,
     },
 ];
+
+const ROUTINE_HIDDEN_TABS = new Set([
+    'row_samples',
+    'lineage',
+    'source_query',
+]);
+
+function isRoutineType(type: string | null | undefined): boolean {
+    return type === 'function' || type === 'procedure';
+}
+
+function getTabDefinitions(tableType: string | null | undefined) {
+    if (!isRoutineType(tableType)) {
+        return allTabDefinitions;
+    }
+    return allTabDefinitions
+        .filter((tab) => !ROUTINE_HIDDEN_TABS.has(tab.key))
+        .map((tab) =>
+            tab.key === 'columns'
+                ? { ...tab, name: 'Parameters' }
+                : tab
+        );
+}
 
 export interface IDataTableViewProps {
     tableId: number;
@@ -172,9 +195,11 @@ export const DataTableView: React.FC<IDataTableViewProps> = ({ tableId }) => {
         [dispatch]
     );
 
+    const tabDefinitions = getTabDefinitions(table?.type);
+
     const [selectedTabKey, setSelectedTabKey] = useState<string>(() => {
         const queryParam = getQueryString();
-        return queryParam['tab'] || snakeCase(tabDefinitions[0].key);
+        return queryParam['tab'] || snakeCase(allTabDefinitions[0].key);
     });
 
     useTrackView(ComponentType.TABLE_DETAIL_VIEW);

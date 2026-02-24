@@ -19,9 +19,17 @@ import { IconButton } from 'ui/Button/IconButton';
 import { OrderByButton } from 'ui/OrderByButton/OrderByButton';
 import { Popover } from 'ui/Popover/Popover';
 import { SearchBar } from 'ui/SearchBar/SearchBar';
+import { Select } from 'ui/Select/Select';
 import { Title } from 'ui/Title/Title';
 import { ToggleSwitch } from 'ui/ToggleSwitch/ToggleSwitch';
 import { TopTierCrown } from 'ui/TopTierCrown/TopTierCrown';
+
+const typeFilterOptions = [
+    { key: '', value: 'All' },
+    { key: 'table', value: 'Tables' },
+    { key: 'function', value: 'Functions' },
+    { key: 'procedure', value: 'Procedures' },
+];
 
 import './DataTableNavigatorSearch.scss';
 
@@ -140,6 +148,24 @@ export const DataTableNavigatorSearch: React.FC<{
                             />
                         </SearchFilterRow>
                     )}
+                    <SearchFilterRow title="Type">
+                        <Select
+                            value={searchFilters?.type ?? ''}
+                            onChange={(e) =>
+                                updateSearchFilter(
+                                    'type',
+                                    e.target.value || null
+                                )
+                            }
+                            fullWidth
+                        >
+                            {typeFilterOptions.map((opt) => (
+                                <option key={opt.key} value={opt.key}>
+                                    {opt.value}
+                                </option>
+                            ))}
+                        </Select>
+                    </SearchFilterRow>
                     <SearchFilterRow title="Tags">
                         <EntitySelect
                             selectedEntities={searchFilters?.tags || []}

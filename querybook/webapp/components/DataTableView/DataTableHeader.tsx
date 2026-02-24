@@ -117,11 +117,23 @@ export const DataTableHeader: React.FunctionComponent<IDataTableHeader> = ({
         </div>
     );
 
+    const tableTypeLabel =
+        table.type === 'function'
+            ? 'Function'
+            : table.type === 'procedure'
+              ? 'Procedure'
+              : null;
+
     const topDOM = (
         <div className="DataTableHeader-top horizontal-space-between">
-            <AccentText size="text" weight="bold" color="light">
-                {tableName}
-            </AccentText>
+            <div className="flex-row" style={{ gap: 8, alignItems: 'center' }}>
+                {tableTypeLabel && (
+                    <Tag>{tableTypeLabel}</Tag>
+                )}
+                <AccentText size="text" weight="bold" color="light">
+                    {tableName}
+                </AccentText>
+            </div>
             {iconDOM}
         </div>
     );

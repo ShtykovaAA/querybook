@@ -179,9 +179,12 @@ def get_table_by_schema_id_and_name(schema_id, name, session=None):
 
 
 @with_session
-def get_table_by_schema_id(schema_id, session=None):
-    """Get an table by its key"""
-    return session.query(DataTable).filter(DataTable.schema_id == schema_id).all()
+def get_table_by_schema_id(schema_id, table_type=None, session=None):
+    """Get tables by schema id, optionally filtered by type."""
+    query = session.query(DataTable).filter(DataTable.schema_id == schema_id)
+    if table_type is not None:
+        query = query.filter(DataTable.type == table_type)
+    return query.all()
 
 
 @with_session
