@@ -366,6 +366,7 @@ class TableTestCase(TestCase):
             id=self.TABLE_ID,
             created_at=CREATED_AT_DT,
             golden=False,
+            type="table",
             information=MagicMock(description=self.TABLE_DESCRIPTION),
             tags=[
                 MagicMock(tag_name="tag_1"),
@@ -412,6 +413,7 @@ class TableTestCase(TestCase):
             "data_elements": ["de_a", "de_b"],
             "data_element_descriptions": ["de_a_description", "de_b_description"],
             "golden": False,
+            "type": "table",
             "importance_score": self.TABLE_WEIGHT,
             "tags": ["tag_1", "tag_2"],
         }
