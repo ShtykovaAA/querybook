@@ -1,9 +1,9 @@
 - name: blue
   color: '#35B5BB'
   fillColor: rgba(53, 181, 187, 0.25)
-- name: pink
-  color: '#ff3975'
-  fillColor: rgba(255, 57, 117, 0.25)
+- name: blue steel
+  color: '#4a86c8'
+  fillColor: rgba(74, 134, 200, 0.25)
 - name: grey
   color: '#bfbfbf'
   fillColor: rgba(191, 191, 191, 0.25)
@@ -22,15 +22,15 @@
 - name: chartreuse
   color: '#aee800'
   fillColor: rgba(174, 232, 0, 0.25)
-- name: baby pink
-  color: '#ff91c8'
-  fillColor: rgba(255, 145, 200, 0.25)
+- name: sky blue
+  color: '#7ab3e0'
+  fillColor: rgba(122, 179, 224, 0.25)
 - name: icy blue
   color: '#85d0ce'
   fillColor: rgba(133, 208, 206, 0.25)
-- name: fuscia
-  color: '#eb37ce'
-  fillColor: rgba(235, 55, 206, 0.25)
+- name: royal blue
+  color: '#3a5fcd'
+  fillColor: rgba(58, 95, 205, 0.25)
 - name: light purple
   color: '#C792EA'
   fillColor: rgba(199, 146, 234, 0.25)

@@ -24,7 +24,7 @@ export interface IUserAvatarComponentProps
 
 const defaultNoUserBackground = '#909090';
 const defaultUserIconBackgrounds = [
-    '#f683ad',
+    '#5b9bd5',
     '#85d0ce',
     '#bdda57',
     '#ffd275',
