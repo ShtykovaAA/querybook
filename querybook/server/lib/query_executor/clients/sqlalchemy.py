@@ -39,6 +39,9 @@ class SqlAlchemyClient(ClientBaseClass):
 class SqlAlchemyCursor(CursorBaseClass):
     def __init__(self, engine):
         self._connection = engine.connect()
+        self._connection = self._connection.execution_options(
+            isolation_level="AUTOCOMMIT"
+        )
         self._notices = []
         self._setup_notice_listener()
 
