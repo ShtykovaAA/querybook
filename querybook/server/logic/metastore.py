@@ -178,12 +178,23 @@ def get_table_by_schema_id_and_name(schema_id, name, session=None):
     )
 
 
+_UNSET = object()
+
+
 @with_session
-def get_table_by_schema_id(schema_id, table_type=None, session=None):
-    """Get tables by schema id, optionally filtered by type."""
+def get_table_by_schema_id(schema_id, table_type=_UNSET, session=None):
+    """Get tables by schema id, optionally filtered by type.
+
+    Args:
+        table_type: _UNSET (default) = no filter, None = only rows with type IS NULL,
+                    any string = filter by that type.
+    """
     query = session.query(DataTable).filter(DataTable.schema_id == schema_id)
-    if table_type is not None:
-        query = query.filter(DataTable.type == table_type)
+    if table_type is not _UNSET:
+        if table_type is None:
+            query = query.filter(DataTable.type.is_(None))
+        else:
+            query = query.filter(DataTable.type == table_type)
     return query.all()
 
 

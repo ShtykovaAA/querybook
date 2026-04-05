@@ -293,7 +293,7 @@ class BaseMetastoreLoader(metaclass=ABCMeta):
                     metastore_id=self.metastore_id,
                     session=session,
                 ).id
-                delete_table_not_in_metastore(schema_id, table_names, session=session)
+                delete_table_not_in_metastore(schema_id, table_names, table_type=None, session=session)
                 schema_tables += [
                     (schema_id, schema_name, table_name) for table_name in table_names
                 ]
@@ -618,9 +618,12 @@ def delete_schema_not_in_metastore(metastore_id, schema_names, session=None):
     session.commit()
 
 
+_UNSET = object()
+
+
 @with_session
-def delete_table_not_in_metastore(schema_id, table_names, session=None):
-    db_tables = get_table_by_schema_id(schema_id, session=session)
+def delete_table_not_in_metastore(schema_id, table_names, table_type=_UNSET, session=None):
+    db_tables = get_table_by_schema_id(schema_id, table_type=table_type, session=session)
 
     with session.no_autoflush:
         for data_table in db_tables:

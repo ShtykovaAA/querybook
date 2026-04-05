@@ -1,6 +1,6 @@
 import unittest
 from unittest import TestCase
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, call, patch, PropertyMock
 
 from const.metastore import DataColumn, DataTable
 from lib.metastore.loaders.sqlalchemy_metastore_loader import (
@@ -304,3 +304,183 @@ class TestGetTableAndColumns(TestCase):
         self.assertEqual(columns[0].name, "id")
         self.assertEqual(columns[0].type, "INTEGER")
         self.assertEqual(columns[1].name, "name")
+
+
+class TestLoadFunctionsSameNameDifferentTypes(TestCase):
+    """Test that a function and procedure with the same base name
+    are both loaded and deleted independently."""
+
+    def setUp(self):
+        self.loader = _make_loader()
+
+    def _make_func_infos(self, *items):
+        """Build list of pg_proc-style rows.
+        Each item is (name, type, identity_args).
+        """
+        return [
+            {
+                "routine_name": name,
+                "routine_type": rtype,
+                "identity_args": args,
+                "return_type": "void" if rtype == "procedure" else "integer",
+                "routine_language": "plpgsql",
+                "routine_definition": f"CREATE OR REPLACE {rtype.upper()} {name}...",
+                "owner": "postgres",
+            }
+            for name, rtype, args in items
+        ]
+
+    @patch(
+        "lib.metastore.loaders.sqlalchemy_metastore_loader.SqlAlchemyMetastoreLoader._create_table_table"
+    )
+    @patch("lib.metastore.base_metastore_loader.get_table_by_schema_id")
+    @patch("logic.metastore.get_schema_by_name")
+    @patch("app.db.DBSession")
+    def test_same_name_function_and_procedure_both_created(
+        self, mock_db_session, mock_get_schema, mock_get_by_schema, mock_create_table
+    ):
+        """A function process_data(x int) and procedure process_data()
+        should both be created — they have different display names."""
+        mock_schema = MagicMock()
+        mock_schema.id = 42
+        mock_get_schema.return_value = mock_schema
+        mock_db_session.return_value.__enter__ = MagicMock(return_value=MagicMock())
+        mock_db_session.return_value.__exit__ = MagicMock(return_value=False)
+
+        # No existing objects in DB — nothing to delete
+        mock_get_by_schema.return_value = []
+
+        func_infos = self._make_func_infos(
+            ("process_data", "function", "x integer"),
+            ("process_data", "procedure", ""),
+        )
+
+        mock_result = MagicMock()
+        mock_result.__iter__ = MagicMock(return_value=iter(func_infos))
+        self.loader._conn.execute.return_value = mock_result
+        self.loader._get_all_filtered_schema_names = MagicMock(
+            return_value=["public"]
+        )
+
+        self.loader._load_functions()
+
+        # Both should be created
+        self.assertEqual(mock_create_table.call_count, 2)
+
+        created_names = {
+            c.kwargs.get("table", c.args[3] if len(c.args) > 3 else None).name
+            if c.kwargs.get("table")
+            else c[1][2]
+            for c in mock_create_table.call_args_list
+        }
+        # function gets display name with args, procedure has no args
+        self.assertIn("process_data(x integer)", created_names)
+        self.assertIn("process_data", created_names)
+
+    @patch(
+        "lib.metastore.loaders.sqlalchemy_metastore_loader.SqlAlchemyMetastoreLoader._create_table_table"
+    )
+    @patch("lib.metastore.base_metastore_loader.get_table_by_schema_id")
+    @patch("logic.metastore.get_schema_by_name")
+    @patch("app.db.DBSession")
+    def test_delete_only_removes_matching_type(
+        self, mock_db_session, mock_get_schema, mock_get_by_schema, mock_create_table
+    ):
+        """When a procedure is removed from PG but the function remains,
+        only the procedure should be deleted from metastore."""
+        mock_schema = MagicMock()
+        mock_schema.id = 42
+        mock_get_schema.return_value = mock_schema
+        mock_db_session.return_value.__enter__ = MagicMock(return_value=MagicMock())
+        mock_db_session.return_value.__exit__ = MagicMock(return_value=False)
+
+        # Existing objects in DB: function + procedure with same base name
+        existing_func = MagicMock()
+        existing_func.id = 100
+        existing_func.name = "process_data(x integer)"
+        existing_func.type = "function"
+
+        existing_proc = MagicMock()
+        existing_proc.id = 101
+        existing_proc.name = "process_data"
+        existing_proc.type = "procedure"
+
+        # get_table_by_schema_id is called twice:
+        # 1st with table_type="function" → returns [existing_func]
+        # 2nd with table_type="procedure" → returns [existing_proc]
+        mock_get_by_schema.side_effect = [
+            [existing_func],  # functions
+            [existing_proc],  # procedures
+        ]
+
+        # Only the function remains in PG, procedure was dropped
+        func_infos = self._make_func_infos(
+            ("process_data", "function", "x integer"),
+        )
+
+        mock_result = MagicMock()
+        mock_result.__iter__ = MagicMock(return_value=iter(func_infos))
+        self.loader._conn.execute.return_value = mock_result
+        self.loader._get_all_filtered_schema_names = MagicMock(
+            return_value=["public"]
+        )
+
+        with patch(
+            "lib.metastore.base_metastore_loader.delete_table"
+        ) as mock_delete, patch(
+            "lib.metastore.base_metastore_loader.delete_es_table_by_id"
+        ):
+            self.loader._load_functions()
+
+            # Only procedure (id=101) should be deleted, function stays
+            mock_delete.assert_called_once()
+            deleted_id = mock_delete.call_args[1]["table_id"]
+            self.assertEqual(deleted_id, 101)
+
+    @patch(
+        "lib.metastore.loaders.sqlalchemy_metastore_loader.SqlAlchemyMetastoreLoader._create_table_table"
+    )
+    @patch("lib.metastore.base_metastore_loader.get_table_by_schema_id")
+    @patch("logic.metastore.get_schema_by_name")
+    @patch("app.db.DBSession")
+    def test_table_not_deleted_when_functions_loaded(
+        self, mock_db_session, mock_get_schema, mock_get_by_schema, mock_create_table
+    ):
+        """Regular tables (type=None) must not be deleted by _load_functions."""
+        mock_schema = MagicMock()
+        mock_schema.id = 42
+        mock_get_schema.return_value = mock_schema
+        mock_db_session.return_value.__enter__ = MagicMock(return_value=MagicMock())
+        mock_db_session.return_value.__exit__ = MagicMock(return_value=False)
+
+        # get_table_by_schema_id with type="function" and type="procedure"
+        # should NOT return regular tables — they have type=None
+        mock_get_by_schema.return_value = []
+
+        func_infos = self._make_func_infos(
+            ("my_func", "function", "x integer"),
+        )
+
+        mock_result = MagicMock()
+        mock_result.__iter__ = MagicMock(return_value=iter(func_infos))
+        self.loader._conn.execute.return_value = mock_result
+        self.loader._get_all_filtered_schema_names = MagicMock(
+            return_value=["public"]
+        )
+
+        with patch(
+            "lib.metastore.base_metastore_loader.delete_table"
+        ) as mock_delete, patch(
+            "lib.metastore.base_metastore_loader.delete_es_table_by_id"
+        ):
+            self.loader._load_functions()
+
+            # No tables should be deleted
+            mock_delete.assert_not_called()
+
+        # get_table_by_schema_id should be called with specific types
+        for c in mock_get_by_schema.call_args_list:
+            self.assertIn(
+                c.kwargs.get("table_type", c[1] if len(c.args) > 1 else None),
+                ["function", "procedure"],
+            )
