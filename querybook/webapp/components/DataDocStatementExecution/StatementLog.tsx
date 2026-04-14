@@ -32,7 +32,7 @@ export const StatementLog: React.FunctionComponent<IStatementLogProps> = ({
         error,
     } = statementLog || ({} as any);
     const logText: string = React.useMemo(
-        () => (data ?? []).join('\n'),
+        () => (data ?? []).join('\n').replace(/\n/g, '<br>'),
         [data]
     );
 
