@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { ComponentType, ElementType } from 'const/analytics';
+import { useDataTable } from 'hooks/redux/useDataTable';
 import { trackClick } from 'lib/analytics';
 import { navigateWithinEnv } from 'lib/utils/query-string';
 import { TextButton } from 'ui/Button/Button';
@@ -23,6 +24,17 @@ export const DataTableViewMini: React.FunctionComponent<IProps> = ({
     onHide,
     onViewDetails,
 }) => {
+    const { table } = useDataTable(tableId);
+    const typeLabels: Record<string, string> = {
+        function: 'Function',
+        procedure: 'Procedure',
+        view: 'View',
+        materialized_view: 'Materialized View',
+        sequence: 'Sequence',
+        index: 'Index',
+    };
+    const objectLabel = typeLabels[table?.type] ?? 'Table';
+
     const [columnId, setColumnId] = React.useState<number>(null);
     React.useEffect(() => {
         setColumnId(null);
@@ -69,7 +81,7 @@ export const DataTableViewMini: React.FunctionComponent<IProps> = ({
                                   isModal: true,
                               });
                     }}
-                    title="View Table"
+                    title={`View ${objectLabel}`}
                     className="table-details-button"
                 />
             </Level>

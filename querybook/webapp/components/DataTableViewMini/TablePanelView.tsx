@@ -36,8 +36,18 @@ export const TablePanelView: React.FunctionComponent<ITablePanelViewProps> = ({
     const renderPanelView = () => {
         const partitionKeyList = table.column_info?.partition_keys ?? [];
 
+        const typeLabels: Record<string, string> = {
+            function: 'Function',
+            procedure: 'Procedure',
+            view: 'View',
+            materialized_view: 'Materialized View',
+            sequence: 'Sequence',
+            index: 'Index',
+        };
+        const panelTitle = typeLabels[table.type] ?? 'Table';
+
         const overviewSection = (
-            <PanelSection title="table">
+            <PanelSection title={panelTitle}>
                 <SubPanelSection title="schema">{schema.name}</SubPanelSection>
                 <SubPanelSection title="name">
                     <span className="flex-row">

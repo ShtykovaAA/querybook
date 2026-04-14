@@ -117,12 +117,15 @@ export const DataTableHeader: React.FunctionComponent<IDataTableHeader> = ({
         </div>
     );
 
-    const tableTypeLabel =
-        table.type === 'function'
-            ? 'Function'
-            : table.type === 'procedure'
-              ? 'Procedure'
-              : null;
+    const typeLabels: Record<string, string> = {
+        function: 'Function',
+        procedure: 'Procedure',
+        view: 'View',
+        materialized_view: 'Materialized View',
+        sequence: 'Sequence',
+        index: 'Index',
+    };
+    const tableTypeLabel = typeLabels[table.type] ?? null;
 
     const topDOM = (
         <div className="DataTableHeader-top horizontal-space-between">

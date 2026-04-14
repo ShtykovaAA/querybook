@@ -63,8 +63,6 @@ def run_migrations_online():
         poolclass=pool.NullPool,
         connect_args={
             "connect_timeout": 3600,
-            "read_timeout": 3600,
-            "write_timeout": 3600,
         },
     )
 

@@ -37,6 +37,7 @@ import { KeyContentDisplay } from 'ui/KeyContentDisplay/KeyContentDisplay';
 import { KeyContentDisplayLink } from 'ui/KeyContentDisplay/KeyContentDisplayLink';
 import { Link } from 'ui/Link/Link';
 import { LoadingRow } from 'ui/Loading/Loading';
+import { CopyButton } from 'ui/CopyButton/CopyButton';
 import { Message } from 'ui/Message/Message';
 import { ShowMoreText } from 'ui/ShowMoreText/ShowMoreText';
 
@@ -192,12 +193,16 @@ export const DataTableViewOverview: React.FC<
 
     const isRoutine =
         table.type === 'function' || table.type === 'procedure';
+    const hasSourceCode = isRoutine ||
+        table.type === 'view' || table.type === 'materialized_view' ||
+        table.type === 'index' || table.type === 'sequence' ||
+        (table.type == null && !!table.hive_metastore_description);
 
     const rawMetastoreInfoDOM = table.hive_metastore_description ? (
         <pre className="raw-metastore-info">
             <ShowMoreText
                 seeLess
-                length={isRoutine ? 5000 : 200}
+                length={hasSourceCode ? 5000 : 200}
                 text={table.hive_metastore_description}
             />
         </pre>
@@ -241,13 +246,22 @@ export const DataTableViewOverview: React.FC<
         </DataTableViewOverviewSection>
     );
 
-    const sourceCodeSection = isRoutine && rawMetastoreInfoDOM ? (
-        <DataTableViewOverviewSection title="Source Code">
+    const sourceCodeTitle = (table.type == null) ? 'DDL' : 'Source Code';
+    const sourceCodeSection = hasSourceCode && rawMetastoreInfoDOM ? (
+        <DataTableViewOverviewSection title={sourceCodeTitle}>
+            <div className="flex-row" style={{ justifyContent: 'flex-end', marginBottom: 4 }}>
+                <CopyButton
+                    copyText={table.hive_metastore_description}
+                    title="Copy"
+                    type="soft"
+                    size="small"
+                />
+            </div>
             {rawMetastoreInfoDOM}
         </DataTableViewOverviewSection>
     ) : null;
 
-    const hiveMetastoreSection = !isRoutine ? (
+    const hiveMetastoreSection = !hasSourceCode ? (
         <DataTableViewOverviewSection title="Raw Metastore Info">
             {rawMetastoreInfoDOM}
         </DataTableViewOverviewSection>

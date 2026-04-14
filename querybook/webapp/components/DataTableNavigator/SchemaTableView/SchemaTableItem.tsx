@@ -50,42 +50,40 @@ function groupTablesByType(
         return [];
     }
 
-    const tablesGroup: ITableResultWithSelection[] = [];
-    const functionsGroup: ITableResultWithSelection[] = [];
-    const proceduresGroup: ITableResultWithSelection[] = [];
+    const typeConfig: Array<{
+        type: string | null;
+        label: string;
+        icon: string;
+    }> = [
+        { type: null, label: 'Tables', icon: 'Table' },
+        { type: 'view', label: 'Views', icon: 'Eye' },
+        { type: 'materialized_view', label: 'Materialized Views', icon: 'Database' },
+        { type: 'sequence', label: 'Sequences', icon: 'Hash' },
+        { type: 'function', label: 'Functions', icon: 'Code' },
+        { type: 'procedure', label: 'Procedures', icon: 'Settings' },
+        { type: 'index', label: 'Indexes', icon: 'List' },
+    ];
 
+    const buckets = new Map<string | null, ITableResultWithSelection[]>();
     for (const table of tables) {
         const item: ITableResultWithSelection = {
             ...table,
             selected: table.id === selectedTableId,
             displayName: table.name,
         };
-        if (table.type === 'function') {
-            functionsGroup.push(item);
-        } else if (table.type === 'procedure') {
-            proceduresGroup.push(item);
-        } else {
-            tablesGroup.push(item);
+        const key = table.type || null;
+        if (!buckets.has(key)) {
+            buckets.set(key, []);
         }
+        buckets.get(key).push(item);
     }
 
     const groups: TypeGroup[] = [];
-    if (tablesGroup.length > 0) {
-        groups.push({ label: 'Tables', icon: 'Table', items: tablesGroup });
-    }
-    if (functionsGroup.length > 0) {
-        groups.push({
-            label: 'Functions',
-            icon: 'Code',
-            items: functionsGroup,
-        });
-    }
-    if (proceduresGroup.length > 0) {
-        groups.push({
-            label: 'Procedures',
-            icon: 'Settings',
-            items: proceduresGroup,
-        });
+    for (const { type, label, icon } of typeConfig) {
+        const items = buckets.get(type);
+        if (items?.length > 0) {
+            groups.push({ label, icon, items });
+        }
     }
 
     return groups;
