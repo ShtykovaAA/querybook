@@ -1,5 +1,6 @@
 from datetime import datetime
 from functools import wraps
+from sqlalchemy import literal, or_, select
 from sqlalchemy.sql.expression import func, and_
 
 from app.flask_app import celery
@@ -10,8 +11,9 @@ from models.schedule import (
     TaskSchedule,
     TaskRunRecord,
 )
-from models.datadoc import DataDoc
+from models.datadoc import DataDoc, DataDocEditor
 from models.board import BoardItem
+from models.user import UserGroupMember
 
 DATADOC_SCHEDULE_PREFIX = "run_data_doc_"
 
@@ -181,10 +183,29 @@ def get_data_doc_schedule_name(id: int):
     return f"{DATADOC_SCHEDULE_PREFIX}{id}"
 
 
+def _doc_ids_accessible_via_editor(uid, session):
+    # Mirrors user_has_permission(READ, DataDocEditor, uid): direct editor
+    # access plus access via every group the user transitively belongs to.
+    base = select(literal(uid).label("eid")).cte(
+        name="effective_uids", recursive=True
+    )
+    effective_uids = base.union_all(
+        select(UserGroupMember.gid).where(UserGroupMember.uid == base.c.eid)
+    )
+
+    return (
+        session.query(DataDocEditor.data_doc_id)
+        .filter(DataDocEditor.uid.in_(select(effective_uids.c.eid)))
+        .filter(or_(DataDocEditor.read.is_(True), DataDocEditor.write.is_(True)))
+    )
+
+
 @with_session
 def get_scheduled_data_docs_by_user(
     uid, environment_id, offset, limit, filters={}, session=None
 ):
+    accessible_doc_ids = _doc_ids_accessible_via_editor(uid, session=session)
+
     query = (
         session.query(DataDoc, TaskSchedule)
         .join(
@@ -192,7 +213,13 @@ def get_scheduled_data_docs_by_user(
             TaskSchedule.name == func.concat(DATADOC_SCHEDULE_PREFIX, DataDoc.id),
             isouter=(not filters.get("scheduled_only", False)),
         )
-        .filter(DataDoc.owner_uid == uid)
+        .filter(
+            or_(
+                DataDoc.public.is_(True),
+                DataDoc.owner_uid == uid,
+                DataDoc.id.in_(accessible_doc_ids),
+            )
+        )
         .filter(DataDoc.archived == False)  # noqa: E712
         .filter(DataDoc.environment_id == environment_id)
         .order_by(DataDoc.id.desc())
