@@ -102,6 +102,7 @@ def run_datadoc_with_config(
                     "uid": runner_id,
                 },
                 "data_doc_id": doc_id,
+                "task_run_record_id": record_id,
             }
             tasks_to_run.append(
                 _start_query_execution_task.si(
@@ -129,6 +130,7 @@ def _start_query_execution_task(
     cell_id,
     query_execution_params,
     data_doc_id,
+    task_run_record_id=None,
 ):
     previous_query_status, previous_query_execution_id = previous_query_result
     if previous_query_status != QueryExecutionStatus.DONE.value:
@@ -136,7 +138,9 @@ def _start_query_execution_task(
 
     with DBSession() as session:
         query_execution = qe_logic.create_query_execution(
-            **query_execution_params, session=session
+            **query_execution_params,
+            task_run_record_id=task_run_record_id,
+            session=session,
         )
         datadoc_logic.append_query_executions_to_data_cell(
             cell_id,

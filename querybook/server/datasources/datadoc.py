@@ -9,6 +9,7 @@ from app.auth.permission import (
 from app.datasource import register, api_assert, with_impression
 from app.flask_app import socketio, celery
 from app.db import DBSession, with_session
+from const.datasources import RESOURCE_NOT_FOUND_STATUS_CODE
 from const.impression import ImpressionItemType
 from const.query_execution import QueryExecutionType
 from env import QuerybookSettings
@@ -373,11 +374,36 @@ def get_datadoc_schedule_run(id):
         return runs
 
 
+@register(
+    "/datadoc/<int:doc_id>/schedule/record/<int:record_id>/executions/",
+    methods=["GET"],
+)
+def get_datadoc_run_record_executions(doc_id, record_id):
+    with DBSession() as session:
+        assert_can_read(doc_id, session=session)
+        verify_data_doc_permission(doc_id, session=session)
+
+        record = schedule_logic.get_task_run_record(record_id, session=session)
+        api_assert(
+            record is not None
+            and record.name == schedule_logic.get_data_doc_schedule_name(doc_id),
+            "RECORD_NOT_FOR_THIS_DATADOC",
+            RESOURCE_NOT_FOUND_STATUS_CODE,
+        )
+        return schedule_logic.get_query_executions_for_task_run_record(
+            record_id, session=session
+        )
+
+
 @register("/datadoc/<int:id>/schedule/run/", methods=["POST"])
 def run_data_doc(id):
+    # Manual trigger of an existing schedule. Allowed for any reader of the
+    # DataDoc — the run still executes under the schedule owner's identity
+    # (kwargs.user_id == data_doc.owner_uid set at schedule creation time),
+    # so opening this up does not grant the caller new privileges.
     schedule_name = schedule_logic.get_data_doc_schedule_name(id)
     with DBSession() as session:
-        assert_can_write(id, session=session)
+        assert_can_read(id, session=session)
         verify_data_doc_permission(id, session=session)
         schedule = schedule_logic.get_task_schedule_by_name(
             schedule_name, session=session

@@ -1,3 +1,4 @@
+import type { IRawQueryExecution } from 'const/queryExecution';
 import type { AllLucideIconNames } from 'ui/Icon/LucideIcons';
 
 // Keep this the same as the Enum defined in const/schedule.py
@@ -87,4 +88,10 @@ export interface IDataDocScheduleKwargs {
 
 export interface IDataDocTaskSchedule extends ITaskSchedule {
     kwargs: IDataDocScheduleKwargs;
+}
+
+export interface IRunRecordExecution {
+    query_execution: IRawQueryExecution;
+    cell_id: number | null;
+    cell_title: string | null;
 }

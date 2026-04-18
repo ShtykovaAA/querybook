@@ -1,10 +1,12 @@
 import moment from 'moment';
 import React from 'react';
+import { useSelector } from 'react-redux';
 
 import { TaskStatusIcon } from 'components/Task/TaskStatusIcon';
 import { formatDuration, generateFormattedDate } from 'lib/utils/datetime';
 import { getWithinEnvUrl } from 'lib/utils/query-string';
 import { IScheduledDoc } from 'redux/scheduledDataDoc/types';
+import { IStoreState } from 'redux/store/types';
 import { Link } from 'ui/Link/Link';
 import { AccentText, StyledText, UntitledText } from 'ui/StyledText/StyledText';
 import { Tag } from 'ui/Tag/Tag';
@@ -99,6 +101,10 @@ export const DataDocScheduleItem: React.FC<IDataDocScheduleItemProps> = ({
 
     const { doc, schedule, last_record: lastRecord } = docWithSchedule;
     const isScheduleDisabled = schedule?.enabled === false;
+    const myUid = useSelector(
+        (state: IStoreState) => state.user.myUserInfo?.uid
+    );
+    const isEditable = doc.owner_uid === myUid;
 
     return (
         <div className="DataDocScheduleItem mb12">
@@ -133,7 +139,14 @@ export const DataDocScheduleItem: React.FC<IDataDocScheduleItemProps> = ({
                     <DataDocScheduleActionEdit
                         docId={doc.id}
                         isPublic={doc.public}
-                        actionText={schedule ? 'Edit Schedule' : 'New Schedule'}
+                        isEditable={isEditable}
+                        actionText={
+                            isEditable
+                                ? schedule
+                                    ? 'Edit Schedule'
+                                    : 'New Schedule'
+                                : 'View Schedule'
+                        }
                     />
                 </div>
             </div>

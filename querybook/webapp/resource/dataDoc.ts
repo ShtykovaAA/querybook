@@ -12,6 +12,7 @@ import type {
 import type {
     IDataDocScheduleKwargs,
     IDataDocTaskSchedule,
+    IRunRecordExecution,
     ITaskStatusRecord,
 } from 'const/schedule';
 import dataDocSocket from 'lib/data-doc/datadoc-socketio';
@@ -183,6 +184,10 @@ export const DataDocScheduleResource = {
     run: (docId: number) => ds.save<null>(`/datadoc/${docId}/schedule/run/`),
     getLogs: (docId: number) =>
         ds.fetch<ITaskStatusRecord[]>(`/datadoc/${docId}/schedule/logs/`),
+    getRecordExecutions: (docId: number, recordId: number) =>
+        ds.fetch<IRunRecordExecution[]>(
+            `/datadoc/${docId}/schedule/record/${recordId}/executions/`
+        ),
 
     getAll: ({
         envId,

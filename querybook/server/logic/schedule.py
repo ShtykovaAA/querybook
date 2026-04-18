@@ -11,8 +11,9 @@ from models.schedule import (
     TaskSchedule,
     TaskRunRecord,
 )
-from models.datadoc import DataDoc, DataDocEditor
+from models.datadoc import DataDoc, DataDocEditor, DataCell, DataCellQueryExecution
 from models.board import BoardItem
+from models.query_execution import QueryExecution
 from models.user import UserGroupMember
 
 DATADOC_SCHEDULE_PREFIX = "run_data_doc_"
@@ -290,6 +291,29 @@ def get_task_run_record_run_with_schedule(docs_with_schedule, session):
 @with_session
 def get_task_run_record(id, session=None):
     return session.query(TaskRunRecord).get(id)
+
+
+@with_session
+def get_query_executions_for_task_run_record(record_id, session=None):
+    rows = (
+        session.query(QueryExecution, DataCell.id, DataCell.meta)
+        .outerjoin(
+            DataCellQueryExecution,
+            DataCellQueryExecution.query_execution_id == QueryExecution.id,
+        )
+        .outerjoin(DataCell, DataCell.id == DataCellQueryExecution.data_cell_id)
+        .filter(QueryExecution.task_run_record_id == record_id)
+        .order_by(QueryExecution.created_at.asc())
+        .all()
+    )
+    return [
+        {
+            "query_execution": qe.to_dict(with_statement=True),
+            "cell_id": cell_id,
+            "cell_title": (cell_meta or {}).get("title"),
+        }
+        for qe, cell_id, cell_meta in rows
+    ]
 
 
 @with_session

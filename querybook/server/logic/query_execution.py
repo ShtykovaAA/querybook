@@ -112,11 +112,17 @@ def create_query_execution(
     uid,
     task_id=None,
     status=QueryExecutionStatus.INITIALIZED,
+    task_run_record_id=None,
     commit=True,
     session=None,
 ):
     query_execution = QueryExecution(
-        query=query, engine_id=engine_id, uid=uid, task_id=task_id, status=status
+        query=query,
+        engine_id=engine_id,
+        uid=uid,
+        task_id=task_id,
+        status=status,
+        task_run_record_id=task_run_record_id,
     )
     session.add(query_execution)
     if commit:

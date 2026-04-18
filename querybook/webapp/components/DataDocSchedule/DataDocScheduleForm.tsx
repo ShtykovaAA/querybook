@@ -240,7 +240,10 @@ export const DataDocScheduleForm: React.FunctionComponent<
                     </>
                 );
 
-                const controlDOM = isEditable && (
+                // Run is allowed for any reader of the DataDoc (backend
+                // dropped the write check on POST schedule/run/). Edit / delete
+                // / create still gated by isEditable.
+                const controlDOM = (onRun || isEditable) && (
                     <Level>
                         <div>
                             {onRun && (
@@ -251,20 +254,24 @@ export const DataDocScheduleForm: React.FunctionComponent<
                                 />
                             )}
                         </div>
-                        <div>
-                            {onDelete && (
+                        {isEditable && (
+                            <div>
+                                {onDelete && (
+                                    <AsyncButton
+                                        title="Delete"
+                                        color="cancel"
+                                        onClick={onDelete}
+                                    />
+                                )}
                                 <AsyncButton
-                                    title="Delete"
-                                    color="cancel"
-                                    onClick={onDelete}
+                                    disabled={
+                                        !isValid || (!dirty && !isCreateForm)
+                                    }
+                                    onClick={submitForm}
+                                    title={isCreateForm ? 'Create' : 'Update'}
                                 />
-                            )}
-                            <AsyncButton
-                                disabled={!isValid || (!dirty && !isCreateForm)}
-                                onClick={submitForm}
-                                title={isCreateForm ? 'Create' : 'Update'}
-                            />
-                        </div>
+                            </div>
+                        )}
                     </Level>
                 );
 

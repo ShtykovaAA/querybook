@@ -39,6 +39,12 @@ class QueryExecution(Base):
         sql.Integer, sql.ForeignKey("query_engine.id", ondelete="CASCADE")
     )
     uid = sql.Column(sql.Integer, sql.ForeignKey("user.id", ondelete="CASCADE"))
+    task_run_record_id = sql.Column(
+        sql.Integer,
+        sql.ForeignKey("task_run_record.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     owner = relationship("User", uselist=False)
     engine = relationship(
@@ -76,6 +82,7 @@ class QueryExecution(Base):
             "query": self.query,
             "engine_id": self.engine_id,
             "uid": self.uid,
+            "task_run_record_id": self.task_run_record_id,
         }
 
         if with_statement:
