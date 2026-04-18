@@ -7,6 +7,7 @@ import { getWithinEnvUrl } from 'lib/utils/query-string';
 import { IScheduledDoc } from 'redux/scheduledDataDoc/types';
 import { Link } from 'ui/Link/Link';
 import { AccentText, StyledText, UntitledText } from 'ui/StyledText/StyledText';
+import { Tag } from 'ui/Tag/Tag';
 
 import {
     DataDocScheduleActionEdit,
@@ -116,6 +117,16 @@ export const DataDocScheduleItem: React.FC<IDataDocScheduleItemProps> = ({
                             <UntitledText size="med" />
                         )}
                     </Link>
+                    {schedule && (
+                        <Tag
+                            mini
+                            highlighted={schedule.enabled}
+                            light={!schedule.enabled}
+                            className="ml8"
+                        >
+                            {schedule.enabled ? 'Enabled' : 'Disabled'}
+                        </Tag>
+                    )}
                     {renderLastRunRecordInfo()}
                 </div>
                 <div>
