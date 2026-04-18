@@ -80,7 +80,11 @@ export const DataDocRightSidebar: React.FunctionComponent<IProps> = ({
         />
     );
     const scheduleButtonDOM = (
-        <DataDocScheduleButton isEditable={isEditable} docId={dataDoc.id} />
+        <DataDocScheduleButton
+            isEditable={isEditable}
+            isPublic={dataDoc.public}
+            docId={dataDoc.id}
+        />
     );
 
     const runAllButtonDOM = isEditable && (

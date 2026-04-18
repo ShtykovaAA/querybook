@@ -14,6 +14,7 @@ import { DataDocScheduleRunLogs } from './DataDocScheduleRunLogs';
 interface IDataDocScheduleFormWrapperProps {
     docId: number;
     isEditable: boolean;
+    isPublic: boolean;
     onSave?: () => void;
     onDelete?: () => void;
 }
@@ -23,7 +24,7 @@ interface IDataDocScheduleProps extends IDataDocScheduleFormWrapperProps {
 
 export const DataDocScheduleFormWrapper: React.FunctionComponent<
     IDataDocScheduleFormWrapperProps
-> = ({ docId, isEditable, onSave, onDelete }) => {
+> = ({ docId, isEditable, isPublic, onSave, onDelete }) => {
     const { isLoading, isError, data, forceFetch } = useResource(
         React.useCallback(() => DataDocScheduleResource.get(docId), [docId])
     );
@@ -33,6 +34,15 @@ export const DataDocScheduleFormWrapper: React.FunctionComponent<
     }
     if (isError) {
         return <ErrorMessage>Error Loading DataDoc Schedule</ErrorMessage>;
+    }
+
+    if (isEditable && !isPublic && !data) {
+        return (
+            <EmptyText className="m24">
+                Schedules can only be created for public DataDocs. Make this
+                DataDoc public to add a schedule.
+            </EmptyText>
+        );
     }
 
     if (data || isEditable) {
@@ -97,7 +107,7 @@ export const DataDocScheduleFormWrapper: React.FunctionComponent<
 
 export const DataDocSchedule: React.FunctionComponent<
     IDataDocScheduleProps
-> = ({ docId, isEditable, onSave, onDelete, currentTab }) => {
+> = ({ docId, isEditable, isPublic, onSave, onDelete, currentTab }) => {
     const getHistoryDOM = () => (
         <div className="schedule-options">
             <DataDocScheduleRunLogs docId={docId} />
@@ -108,6 +118,7 @@ export const DataDocSchedule: React.FunctionComponent<
         <DataDocScheduleFormWrapper
             docId={docId}
             isEditable={isEditable}
+            isPublic={isPublic}
             onSave={onSave}
             onDelete={onDelete}
         />

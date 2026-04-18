@@ -121,6 +121,7 @@ export const DataDocScheduleItem: React.FC<IDataDocScheduleItemProps> = ({
                 <div>
                     <DataDocScheduleActionEdit
                         docId={doc.id}
+                        isPublic={doc.public}
                         actionText={schedule ? 'Edit Schedule' : 'New Schedule'}
                     />
                 </div>

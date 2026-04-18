@@ -8,6 +8,7 @@ import { Tabs } from 'ui/Tabs/Tabs';
 interface IProps {
     docId: number;
     isEditable: boolean;
+    isPublic: boolean;
     onHide: () => void;
 }
 
@@ -18,6 +19,7 @@ export type IScheduleTabs = typeof scheduleTabs[number];
 export const DataDocScheduleModal: React.FunctionComponent<IProps> = ({
     docId,
     isEditable,
+    isPublic,
     onHide,
 }) => {
     const [currentTab, setCurrentTab] =
@@ -42,6 +44,7 @@ export const DataDocScheduleModal: React.FunctionComponent<IProps> = ({
         <Modal onHide={onHide} topDOM={topDOM}>
             <DataDocSchedule
                 isEditable={isEditable}
+                isPublic={isPublic}
                 docId={docId}
                 currentTab={currentTab}
             />

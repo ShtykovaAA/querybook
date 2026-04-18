@@ -290,6 +290,7 @@ def create_datadoc_schedule(
         assert_can_write(id, session=session)
         data_doc = logic.get_data_doc_by_id(id, session=session)
         verify_environment_permission([data_doc.environment_id])
+        api_assert(data_doc.public, "SCHEDULE_REQUIRES_PUBLIC_DATADOC")
 
         return schedule_logic.create_task_schedule(
             schedule_name,
@@ -325,6 +326,7 @@ def update_datadoc_schedule(id, cron=None, enabled=None, kwargs=None):
         # schedule update will not change the owner
         # it will be always the datadoc owner
         data_doc = logic.get_data_doc_by_id(id, session=session)
+        api_assert(data_doc.public, "SCHEDULE_REQUIRES_PUBLIC_DATADOC")
 
         updated_fields = {}
         if cron is not None:

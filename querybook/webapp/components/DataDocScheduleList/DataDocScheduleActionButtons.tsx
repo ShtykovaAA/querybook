@@ -9,8 +9,9 @@ import { Modal } from 'ui/Modal/Modal';
 
 export const DataDocScheduleActionEdit: React.FunctionComponent<{
     docId: number;
+    isPublic: boolean;
     actionText: string;
-}> = ({ docId, actionText }) => {
+}> = ({ docId, isPublic, actionText }) => {
     const [showModal, setShowModal] = useState(false);
     const dispatch: Dispatch = useDispatch();
 
@@ -27,6 +28,7 @@ export const DataDocScheduleActionEdit: React.FunctionComponent<{
                         <DataDocSchedule
                             docId={docId}
                             isEditable={true}
+                            isPublic={isPublic}
                             currentTab={'schedule'}
                         />
                     </div>
@@ -59,6 +61,7 @@ export const DataDocScheduleActionHistory: React.FunctionComponent<{
                         <DataDocSchedule
                             docId={docId}
                             isEditable={false}
+                            isPublic={true}
                             currentTab={'history'}
                         />
                     </div>

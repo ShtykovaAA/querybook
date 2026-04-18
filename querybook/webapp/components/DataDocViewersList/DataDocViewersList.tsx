@@ -11,6 +11,7 @@ import {
     permissionToReadWrite,
 } from 'lib/data-doc/datadoc-permission';
 import { addDataDocAccessRequest } from 'redux/dataDoc/action';
+import { DataDocScheduleResource } from 'resource/dataDoc';
 import { Dispatch } from 'redux/store/types';
 import { ViewersList } from 'ui/ViewersList/ViewersList';
 
@@ -60,12 +61,32 @@ export const DataDocViewersList: React.FunctionComponent<
     });
 
     const onTabSelect = React.useCallback(
-        (isPublic) => {
-            if (!readonly) {
-                changeDataDocPublic(dataDoc.id, isPublic);
+        async (isPublic) => {
+            if (readonly) {
+                return;
             }
+            // Block public → private if the DataDoc has a schedule. Schedules
+            // can only exist on public DataDocs, so the user must delete the
+            // schedule first.
+            if (!isPublic && dataDoc.public) {
+                try {
+                    const { data } = await DataDocScheduleResource.get(
+                        dataDoc.id
+                    );
+                    if (data) {
+                        toast.error(
+                            'This DataDoc has a schedule. Delete the schedule first, then make the DataDoc private.'
+                        );
+                        return;
+                    }
+                } catch {
+                    // If the check fails, fall through and let the backend
+                    // be the source of truth.
+                }
+            }
+            changeDataDocPublic(dataDoc.id, isPublic);
         },
-        [changeDataDocPublic, dataDoc.id, readonly]
+        [changeDataDocPublic, dataDoc.id, dataDoc.public, readonly]
     );
 
     const onUserSelect = React.useCallback(

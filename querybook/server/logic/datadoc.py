@@ -1,6 +1,7 @@
 import datetime
 from sqlalchemy import func
 
+from app.datasource import api_assert
 from app.db import with_session
 from const.data_doc import DataCellType
 from const.elasticsearch import ElasticsearchItem
@@ -140,6 +141,25 @@ def update_data_doc(id, commit=True, session=None, **fields):
 
     if not data_doc:
         return
+
+    # Schedules can only exist on public DataDocs. Block transitioning a
+    # DataDoc with an existing schedule from public to private — the user
+    # must delete the schedule first.
+    if (
+        "public" in fields
+        and fields["public"] is False
+        and data_doc.public is True
+    ):
+        from logic import schedule as schedule_logic
+
+        schedule_name = schedule_logic.get_data_doc_schedule_name(id)
+        existing_schedule = schedule_logic.get_task_schedule_by_name(
+            schedule_name, session=session
+        )
+        api_assert(
+            existing_schedule is None,
+            "DATADOC_HAS_SCHEDULE_DELETE_FIRST",
+        )
 
     updated = update_model_fields(
         data_doc,

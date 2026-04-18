@@ -9,11 +9,13 @@ import { DataDocScheduleModal } from './DataDocScheduleModal';
 interface IProps {
     docId: number;
     isEditable: boolean;
+    isPublic: boolean;
 }
 
 export const DataDocScheduleButton: React.FunctionComponent<IProps> = ({
     docId,
     isEditable,
+    isPublic,
 }) => {
     const [showModal, setShowModal] = React.useState(false);
 
@@ -36,6 +38,7 @@ export const DataDocScheduleButton: React.FunctionComponent<IProps> = ({
                 <DataDocScheduleModal
                     docId={docId}
                     isEditable={isEditable}
+                    isPublic={isPublic}
                     onHide={() => setShowModal(false)}
                 />
             ) : null}
