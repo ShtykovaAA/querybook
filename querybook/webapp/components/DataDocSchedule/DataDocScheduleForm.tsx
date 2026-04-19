@@ -66,6 +66,16 @@ const scheduleFormSchema = Yup.object().shape({
     }),
     enabled: Yup.boolean().notRequired(),
     kwargs: Yup.object().shape({
+        timeout_minutes: Yup.number()
+            .integer('Must be a whole number of minutes')
+            .min(1, 'Minimum 1 minute')
+            .max(2880, 'Maximum 2880 minutes (2 days)')
+            .nullable(),
+        max_retries: Yup.number()
+            .integer('Must be a whole number')
+            .min(0, 'Cannot be negative')
+            .max(10, 'Maximum 10 retries')
+            .nullable(),
         notifications: Yup.array().of(
             Yup.object().shape({
                 with: Yup.string().nullable(),
@@ -109,6 +119,8 @@ interface IScheduleFormValues {
     kwargs: {
         notifications: IDataDocScheduleNotification[];
         exports: IDataDocScheduleKwargs['exports'];
+        timeout_minutes?: number | null;
+        max_retries?: number | null;
     };
 }
 
@@ -143,6 +155,8 @@ export const DataDocScheduleForm: React.FunctionComponent<
               kwargs: {
                   exports: [],
                   notifications: [],
+                  timeout_minutes: null,
+                  max_retries: 0,
               },
           }
         : {
@@ -150,6 +164,11 @@ export const DataDocScheduleForm: React.FunctionComponent<
               enabled,
               kwargs: {
                   exports: kwargs.exports,
+                  timeout_minutes:
+                      kwargs.timeout_seconds != null
+                          ? Math.round(kwargs.timeout_seconds / 60)
+                          : null,
+                  max_retries: kwargs.max_retries ?? 0,
                   // merge notification config from `config.to_user` and `config.to` to `config.to_all`
                   notifications: kwargs.notifications.map((n) => ({
                       ...n,
@@ -200,10 +219,20 @@ export const DataDocScheduleForm: React.FunctionComponent<
                     await getExporterAuthentication(exporter);
                 }
 
+                const kwargsToSend: IDataDocScheduleKwargs = {
+                    notifications: values.kwargs.notifications,
+                    exports: values.kwargs.exports,
+                    max_retries: values.kwargs.max_retries ?? 0,
+                };
+                if (values.kwargs.timeout_minutes != null) {
+                    kwargsToSend.timeout_seconds =
+                        Number(values.kwargs.timeout_minutes) * 60;
+                }
+
                 if (isCreateForm) {
-                    await onCreate(cronRepr, values.kwargs);
+                    await onCreate(cronRepr, kwargsToSend);
                 } else {
-                    await onUpdate(cronRepr, values.enabled, values.kwargs);
+                    await onUpdate(cronRepr, values.enabled, kwargsToSend);
                 }
             }}
         >
@@ -217,6 +246,30 @@ export const DataDocScheduleForm: React.FunctionComponent<
             }) => {
                 const enabledField = !isCreateForm && (
                     <SimpleField label="Enabled" name="enabled" type="toggle" />
+                );
+
+                const executionSettingsField = (
+                    <>
+                        <FormSectionHeader>
+                            Execution Settings
+                        </FormSectionHeader>
+                        <SimpleField
+                            label="Timeout (minutes)"
+                            name="kwargs.timeout_minutes"
+                            type="number"
+                            help="Cancel the run if it takes longer than this. Leave empty to use the global default (2 days)."
+                            min={1}
+                            max={2880}
+                        />
+                        <SimpleField
+                            label="Max retries on failure"
+                            name="kwargs.max_retries"
+                            type="number"
+                            help="How many times to automatically re-run the DataDoc if it fails or times out. 0 = no retry. Delay grows exponentially: 1, 2, 4, 8… min, capped at 30 min."
+                            min={0}
+                            max={10}
+                        />
+                    </>
                 );
 
                 const notificationField = (
@@ -289,6 +342,7 @@ export const DataDocScheduleForm: React.FunctionComponent<
                                         }
                                     />
                                     {enabledField}
+                                    {executionSettingsField}
                                     {notificationField}
                                     {exportField}
 

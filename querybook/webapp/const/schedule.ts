@@ -6,6 +6,7 @@ export enum TaskRunStatus {
     RUNNING = 0,
     SUCCESS,
     FAILURE,
+    TIMEOUT,
 }
 
 export interface IStatusTypeList {
@@ -31,6 +32,11 @@ export const StatusTypes: IStatusTypeList = {
         class: 'status-failure',
         iconName: 'ThumbsDown',
         text: 'Failure',
+    },
+    [TaskRunStatus.TIMEOUT]: {
+        class: 'status-timeout',
+        iconName: 'Clock',
+        text: 'Timeout',
     },
 };
 
@@ -58,6 +64,8 @@ export interface ITaskStatusRecord {
     updated_at: number;
     task_type: TaskType;
     error_message: string | null;
+    attempt: number;
+    parent_run_record_id: number | null;
 }
 
 export enum NotifyOn {
@@ -78,6 +86,8 @@ export interface IDataDocScheduleNotification {
 export interface IDataDocScheduleKwargs {
     doc_id?: number;
     user_id?: number;
+    timeout_seconds?: number;
+    max_retries?: number;
     notifications?: IDataDocScheduleNotification[];
     exports?: Array<{
         exporter_cell_id?: number;

@@ -116,6 +116,17 @@ class TaskRunRecord(CRUDMixin, TruncateString("error_message"), db.Base):
     created_at = sql.Column(sql.DateTime, default=now)
     updated_at = sql.Column(sql.DateTime, default=now)
     error_message = sql.Column(sql.String(length=description_length))
+    attempt = sql.Column(sql.Integer, nullable=False, default=1)
+    parent_run_record_id = sql.Column(
+        sql.Integer,
+        sql.ForeignKey(
+            "task_run_record.id",
+            ondelete="SET NULL",
+            name="task_run_record_parent_id_fk",
+        ),
+        nullable=True,
+        index=True,
+    )
 
     task = relationship(
         "TaskSchedule",

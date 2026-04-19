@@ -317,8 +317,14 @@ def get_query_executions_for_task_run_record(record_id, session=None):
 
 
 @with_session
-def create_task_run_record(name, session=None):
-    task_record = TaskRunRecord(name=name)
+def create_task_run_record(
+    name, attempt=1, parent_run_record_id=None, session=None
+):
+    task_record = TaskRunRecord(
+        name=name,
+        attempt=attempt,
+        parent_run_record_id=parent_run_record_id,
+    )
 
     session.add(task_record)
     session.commit()
@@ -345,9 +351,16 @@ def update_task_run_record(id, status=None, error_message=None, session=None):
 
 
 @with_session
-def create_task_run_record_for_celery_task(task, session=None):
+def create_task_run_record_for_celery_task(
+    task, attempt=1, parent_run_record_id=None, session=None
+):
     job_name = task.request.get("shadow", task.name)
-    return create_task_run_record(name=job_name, session=session).id
+    return create_task_run_record(
+        name=job_name,
+        attempt=attempt,
+        parent_run_record_id=parent_run_record_id,
+        session=session,
+    ).id
 
 
 def with_task_logging(

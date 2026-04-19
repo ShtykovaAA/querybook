@@ -1,7 +1,11 @@
 import React from 'react';
 
 import { TaskStatusIcon } from 'components/Task/TaskStatusIcon';
-import { ITaskStatusRecord, IRunRecordExecution } from 'const/schedule';
+import {
+    ITaskStatusRecord,
+    IRunRecordExecution,
+    TaskRunStatus,
+} from 'const/schedule';
 import { STATUS_TO_TEXT_MAPPING } from 'const/queryStatus';
 import { useResource } from 'hooks/useResource';
 import { generateFormattedDate } from 'lib/utils/datetime';
@@ -184,53 +188,202 @@ const RecordExecutions: React.FC<{ docId: number; recordId: number }> = ({
     );
 };
 
-const RunRecordRow: React.FC<{
+interface IRecordGroup {
+    parentId: number;
+    attempts: ITaskStatusRecord[];
+    finalRecord: ITaskStatusRecord;
+}
+
+function groupRecords(records: ITaskStatusRecord[]): IRecordGroup[] {
+    const groups = new Map<number, ITaskStatusRecord[]>();
+    for (const r of records) {
+        const key = r.parent_run_record_id ?? r.id;
+        if (!groups.has(key)) {
+            groups.set(key, []);
+        }
+        groups.get(key).push(r);
+    }
+    return [...groups.entries()]
+        .map(([parentId, attempts]) => {
+            const sorted = [...attempts].sort(
+                (a, b) => (a.attempt ?? 1) - (b.attempt ?? 1)
+            );
+            return {
+                parentId,
+                attempts: sorted,
+                finalRecord: sorted[sorted.length - 1],
+            };
+        })
+        .sort(
+            (a, b) => b.attempts[0].created_at - a.attempts[0].created_at
+        );
+}
+
+const TIMEOUT_TOOLTIP = 'Cancelled after exceeding the configured timeout';
+
+const RecordRow: React.FC<{
+    record: ITaskStatusRecord;
+    expanded: boolean;
+    onToggle: () => void;
+    docId: number;
+    indent?: boolean;
+    label?: React.ReactNode;
+}> = ({ record, expanded, onToggle, docId, indent, label }) => {
+    const isTimeout = record.status === TaskRunStatus.TIMEOUT;
+    return (
+        <div
+            style={{
+                borderBottom: '1px solid var(--bg-lightest)',
+                paddingBottom: 8,
+                marginBottom: 8,
+                marginLeft: indent ? 24 : 0,
+            }}
+        >
+            <div
+                className="horizontal-space-between"
+                style={{ gap: 12 }}
+                aria-label={isTimeout ? TIMEOUT_TOOLTIP : undefined}
+                data-balloon-pos={isTimeout ? 'up' : undefined}
+            >
+                <IconButton
+                    icon={expanded ? 'ChevronDown' : 'ChevronRight'}
+                    onClick={onToggle}
+                    noPadding
+                    title="Expand"
+                />
+                <div style={{ flex: 1, minWidth: 80 }}>
+                    <b>#{record.id}</b>
+                    {label ? (
+                        <StyledText
+                            color="light"
+                            size="small"
+                            className="ml4"
+                        >
+                            {label}
+                        </StyledText>
+                    ) : null}
+                </div>
+                <div style={{ flex: 2 }}>
+                    {generateFormattedDate(record.created_at, 'X')}
+                </div>
+                <div style={{ flex: 2 }}>
+                    {generateFormattedDate(record.updated_at, 'X')}
+                </div>
+                <div style={{ flex: 1 }}>
+                    <TaskStatusIcon type={record.status} />
+                </div>
+                <div
+                    style={{
+                        flex: 5,
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-all',
+                    }}
+                >
+                    {record.error_message ? (
+                        <ShowMoreText text={record.error_message} />
+                    ) : null}
+                </div>
+            </div>
+            {expanded && <RecordExecutions docId={docId} recordId={record.id} />}
+        </div>
+    );
+};
+
+const SingleAttemptGroup: React.FC<{
     record: ITaskStatusRecord;
     expanded: boolean;
     onToggle: () => void;
     docId: number;
 }> = ({ record, expanded, onToggle, docId }) => (
-    <div
-        style={{
-            borderBottom: '1px solid var(--bg-lightest)',
-            paddingBottom: 8,
-            marginBottom: 8,
-        }}
-    >
-        <div className="horizontal-space-between" style={{ gap: 12 }}>
-            <IconButton
-                icon={expanded ? 'ChevronDown' : 'ChevronRight'}
-                onClick={onToggle}
-                noPadding
-                title="Expand"
-            />
-            <div style={{ flex: 1, minWidth: 80 }}>
-                <b>#{record.id}</b>
-            </div>
-            <div style={{ flex: 2 }}>
-                {generateFormattedDate(record.created_at, 'X')}
-            </div>
-            <div style={{ flex: 2 }}>
-                {generateFormattedDate(record.updated_at, 'X')}
-            </div>
-            <div style={{ flex: 1 }}>
-                <TaskStatusIcon type={record.status} />
-            </div>
-            <div
-                style={{
-                    flex: 5,
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-all',
-                }}
-            >
-                {record.error_message ? (
-                    <ShowMoreText text={record.error_message} />
-                ) : null}
-            </div>
-        </div>
-        {expanded && <RecordExecutions docId={docId} recordId={record.id} />}
-    </div>
+    <RecordRow
+        record={record}
+        expanded={expanded}
+        onToggle={onToggle}
+        docId={docId}
+    />
 );
+
+const MultiAttemptGroup: React.FC<{
+    group: IRecordGroup;
+    expanded: boolean;
+    onToggle: () => void;
+    docId: number;
+}> = ({ group, expanded, onToggle, docId }) => {
+    const [expandedAttemptId, setExpandedAttemptId] = React.useState<
+        number | null
+    >(null);
+    const total = group.attempts.length;
+    const finalStatusText =
+        group.finalRecord.status === TaskRunStatus.SUCCESS
+            ? 'SUCCESS'
+            : group.finalRecord.status === TaskRunStatus.TIMEOUT
+            ? 'TIMEOUT'
+            : 'FAILURE';
+    const groupTooltip = `Final status after ${total} attempts: ${finalStatusText}`;
+    const first = group.attempts[0];
+
+    return (
+        <div
+            style={{
+                borderBottom: '1px solid var(--bg-lightest)',
+                paddingBottom: 8,
+                marginBottom: 8,
+            }}
+        >
+            <div
+                className="horizontal-space-between"
+                style={{ gap: 12 }}
+                aria-label={groupTooltip}
+                data-balloon-pos="up"
+            >
+                <IconButton
+                    icon={expanded ? 'ChevronDown' : 'ChevronRight'}
+                    onClick={onToggle}
+                    noPadding
+                    title="Expand attempts"
+                />
+                <div style={{ flex: 1, minWidth: 80 }}>
+                    <b>#{group.parentId}</b>
+                    <StyledText color="light" size="small" className="ml4">
+                        Attempt {group.finalRecord.attempt ?? 1} of {total}
+                    </StyledText>
+                </div>
+                <div style={{ flex: 2 }}>
+                    {generateFormattedDate(first.created_at, 'X')}
+                </div>
+                <div style={{ flex: 2 }}>
+                    {generateFormattedDate(
+                        group.finalRecord.updated_at,
+                        'X'
+                    )}
+                </div>
+                <div style={{ flex: 1 }}>
+                    <TaskStatusIcon type={group.finalRecord.status} />
+                </div>
+                <div style={{ flex: 5 }} />
+            </div>
+            {expanded && (
+                <div className="mt8">
+                    {group.attempts.map((attempt) => (
+                        <RecordRow
+                            key={attempt.id}
+                            record={attempt}
+                            docId={docId}
+                            indent
+                            label={`Attempt ${attempt.attempt ?? 1}`}
+                            expanded={expandedAttemptId === attempt.id}
+                            onToggle={() =>
+                                setExpandedAttemptId((cur) =>
+                                    cur === attempt.id ? null : attempt.id
+                                )
+                            }
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
 
 export const DataDocScheduleRunLogs: React.FunctionComponent<{
     docId: number;
@@ -238,7 +391,9 @@ export const DataDocScheduleRunLogs: React.FunctionComponent<{
     const { isLoading, isError, data } = useResource(
         React.useCallback(() => DataDocScheduleResource.getLogs(docId), [docId])
     );
-    const [expandedId, setExpandedId] = React.useState<number | null>(null);
+    const [expandedKey, setExpandedKey] = React.useState<number | null>(null);
+
+    const groups = React.useMemo(() => groupRecords(data ?? []), [data]);
 
     if (isLoading) {
         return <Loading />;
@@ -254,19 +409,33 @@ export const DataDocScheduleRunLogs: React.FunctionComponent<{
 
     return (
         <div>
-            {data.map((record) => (
-                <RunRecordRow
-                    key={record.id}
-                    record={record}
-                    docId={docId}
-                    expanded={expandedId === record.id}
-                    onToggle={() =>
-                        setExpandedId((cur) =>
-                            cur === record.id ? null : record.id
-                        )
-                    }
-                />
-            ))}
+            {groups.map((group) =>
+                group.attempts.length === 1 ? (
+                    <SingleAttemptGroup
+                        key={group.parentId}
+                        record={group.attempts[0]}
+                        docId={docId}
+                        expanded={expandedKey === group.parentId}
+                        onToggle={() =>
+                            setExpandedKey((cur) =>
+                                cur === group.parentId ? null : group.parentId
+                            )
+                        }
+                    />
+                ) : (
+                    <MultiAttemptGroup
+                        key={group.parentId}
+                        group={group}
+                        docId={docId}
+                        expanded={expandedKey === group.parentId}
+                        onToggle={() =>
+                            setExpandedKey((cur) =>
+                                cur === group.parentId ? null : group.parentId
+                            )
+                        }
+                    />
+                )
+            )}
         </div>
     );
 };

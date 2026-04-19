@@ -1,3 +1,5 @@
+import datetime
+
 from celery import chain
 
 from app.db import with_session, DBSession
@@ -11,20 +13,31 @@ from const.schedule import TaskRunStatus
 
 from lib.logger import get_logger
 from lib.query_analysis.templating import render_templated_query
+from lib.scheduled_datadoc.exc import DataDocRunTimeoutException
 from lib.scheduled_datadoc.export import export_datadoc
 from lib.scheduled_datadoc.legacy import convert_if_legacy_datadoc_schedule
 from lib.scheduled_datadoc.notification import notifiy_on_datadoc_complete
+from lib.stats_logger import (
+    DATADOC_SCHEDULED_RETRIES,
+    DATADOC_SCHEDULED_RUNS,
+    stats_logger,
+)
 
 from logic import datadoc as datadoc_logic
 from logic import query_execution as qe_logic
 from logic.schedule import (
     create_task_run_record_for_celery_task,
+    get_data_doc_schedule_name,
+    get_task_schedule_by_name,
     update_task_run_record,
 )
 from tasks.run_query import run_query_task
 
 LOG = get_logger(__file__)
 GENERIC_QUERY_FAILURE_MSG = "Execution did not finish successfully, workflow failed"
+RUN_QUERY_TIME_LIMIT_BUFFER_SECONDS = 60
+RETRY_BASE_DELAY_SECONDS = 60
+RETRY_MAX_DELAY_SECONDS = 30 * 60
 
 
 @celery.task(bind=True)
@@ -49,6 +62,27 @@ def run_datadoc_with_config(
 ):
     tasks_to_run = []
     record_id = None
+    retry_parent_id = None
+
+    timeout_seconds = kwargs.get("timeout_seconds")
+    max_retries = kwargs.get("max_retries", 0) or 0
+    attempt = kwargs.get("_attempt", 1)
+    parent_run_record_id = kwargs.get("_parent_run_record_id")
+
+    deadline_epoch = None
+    if timeout_seconds:
+        deadline_epoch = (
+            datetime.datetime.utcnow()
+            + datetime.timedelta(seconds=timeout_seconds)
+        ).timestamp()
+
+    # For retry attempts, honor a disabled schedule by aborting before work.
+    # First attempts come from Celery Beat and only fire when enabled=True,
+    # so we gate only on retries.
+    if execution_type == QueryExecutionType.SCHEDULED.value and attempt > 1:
+        schedule = get_task_schedule_by_name(get_data_doc_schedule_name(doc_id))
+        if schedule is None or not schedule.enabled:
+            return
 
     with DBSession() as session:
         data_doc = datadoc_logic.get_data_doc_by_id(doc_id, session=session)
@@ -60,7 +94,26 @@ def run_datadoc_with_config(
 
         # Create db entry record only for scheduled run
         if execution_type == QueryExecutionType.SCHEDULED.value:
-            record_id = create_task_run_record_for_celery_task(self, session=session)
+            record_id = create_task_run_record_for_celery_task(
+                self,
+                attempt=attempt,
+                parent_run_record_id=parent_run_record_id,
+                session=session,
+            )
+            # For the first attempt we treat this record as the parent for
+            # any future retries in the same chain.
+            retry_parent_id = parent_run_record_id or record_id
+
+        original_run_kwargs = {
+            "doc_id": doc_id,
+            "user_id": user_id,
+            "execution_type": execution_type,
+            "notifications": notifications,
+            "exports": exports,
+            "max_retries": max_retries,
+        }
+        if timeout_seconds:
+            original_run_kwargs["timeout_seconds"] = timeout_seconds
 
         completion_params = {
             "doc_id": doc_id,
@@ -68,6 +121,11 @@ def run_datadoc_with_config(
             "record_id": record_id,
             "notifications": notifications,
             "exports": exports,
+            "deadline_epoch": deadline_epoch,
+            "max_retries": max_retries,
+            "attempt": attempt,
+            "parent_run_record_id": retry_parent_id,
+            "original_run_kwargs": original_run_kwargs,
         }
 
         # Prepping chain jobs each unit is a [make_qe_task, run_query_task] combo
@@ -103,6 +161,7 @@ def run_datadoc_with_config(
                 },
                 "data_doc_id": doc_id,
                 "task_run_record_id": record_id,
+                "deadline_epoch": deadline_epoch,
             }
             tasks_to_run.append(
                 _start_query_execution_task.si(
@@ -113,7 +172,13 @@ def run_datadoc_with_config(
                 else _start_query_execution_task.s(**start_query_execution_kwargs)
             )
 
-            tasks_to_run.append(run_query_task.s(execution_type=execution_type))
+            run_query_signature = run_query_task.s(execution_type=execution_type)
+            if timeout_seconds:
+                run_query_signature = run_query_signature.set(
+                    soft_time_limit=timeout_seconds,
+                    time_limit=timeout_seconds + RUN_QUERY_TIME_LIMIT_BUFFER_SECONDS,
+                )
+            tasks_to_run.append(run_query_signature)
 
     chain(*tasks_to_run).apply_async(
         link=on_datadoc_run_success.s(
@@ -131,10 +196,16 @@ def _start_query_execution_task(
     query_execution_params,
     data_doc_id,
     task_run_record_id=None,
+    deadline_epoch=None,
 ):
     previous_query_status, previous_query_execution_id = previous_query_result
     if previous_query_status != QueryExecutionStatus.DONE.value:
         raise Exception(get_datadoc_error_message(previous_query_execution_id))
+
+    if deadline_epoch is not None and datetime.datetime.utcnow().timestamp() > deadline_epoch:
+        raise DataDocRunTimeoutException(
+            f"DataDoc run exceeded timeout before cell {cell_id}"
+        )
 
     with DBSession() as session:
         query_execution = qe_logic.create_query_execution(
@@ -211,12 +282,29 @@ def on_datadoc_run_failure(
     completion_params,
     **kwargs,
 ):
+    deadline_epoch = completion_params.get("deadline_epoch")
+    is_timeout = (
+        type(exc).__name__ == "DataDocRunTimeoutException"
+        or (
+            deadline_epoch is not None
+            and datetime.datetime.utcnow().timestamp() > deadline_epoch
+        )
+    )
 
-    error_msg = "DataDoc failed to run. Task {0!r} raised error: {1!r}".format(
-        request.id, exc
+    error_msg = (
+        "DataDoc run timed out. Task {0!r} exceeded the configured timeout".format(
+            request.id
+        )
+        if is_timeout
+        else "DataDoc failed to run. Task {0!r} raised error: {1!r}".format(
+            request.id, exc
+        )
     )
     return on_datadoc_completion(
-        is_success=False, error_msg=error_msg, **completion_params
+        is_success=False,
+        is_timeout=is_timeout,
+        error_msg=error_msg,
+        **completion_params,
     )
 
 
@@ -230,31 +318,101 @@ def on_datadoc_completion(
     # Success/Failure handling
     is_success,
     error_msg=None,
+    is_timeout=False,
+    deadline_epoch=None,
+    max_retries=0,
+    attempt=1,
+    parent_run_record_id=None,
+    original_run_kwargs=None,
 ):
+    will_retry = (
+        not is_success
+        and record_id is not None
+        and attempt < max_retries + 1
+        and original_run_kwargs is not None
+        and _retry_schedule_still_enabled(doc_id)
+    )
+
     try:
         export_urls = []
         if is_success:
             export_urls = export_datadoc(doc_id, user_id, exports)
 
-        notifiy_on_datadoc_complete(
-            doc_id,
-            is_success,
-            notifications,
-            error_msg,
-            export_urls,
-        )
+        if not will_retry:
+            notifiy_on_datadoc_complete(
+                doc_id,
+                is_success,
+                notifications,
+                error_msg,
+                export_urls,
+            )
 
     except Exception as e:
         is_success = False
         error_msg = str(e)
         LOG.error(e, exc_info=True)
+        # Export/notify failure after a successful run must not silently
+        # bypass retry — re-evaluate eligibility.
+        will_retry = (
+            not is_success
+            and record_id is not None
+            and attempt < max_retries + 1
+            and original_run_kwargs is not None
+            and _retry_schedule_still_enabled(doc_id)
+        )
     finally:
         # when record_id is None, it's trigerred by adhoc datadoc run, no need to update the record.
         if record_id:
+            if is_success:
+                status = TaskRunStatus.SUCCESS
+            elif is_timeout:
+                status = TaskRunStatus.TIMEOUT
+            else:
+                status = TaskRunStatus.FAILURE
             update_task_run_record(
                 id=record_id,
-                status=TaskRunStatus.SUCCESS if is_success else TaskRunStatus.FAILURE,
+                status=status,
                 error_message=error_msg,
             )
+            stats_logger.incr(
+                DATADOC_SCHEDULED_RUNS,
+                tags={"status": status.name.lower()},
+            )
+
+    if will_retry:
+        _enqueue_datadoc_retry(
+            doc_id=doc_id,
+            original_run_kwargs=original_run_kwargs,
+            attempt=attempt,
+            parent_run_record_id=parent_run_record_id,
+        )
 
     return is_success
+
+
+def _retry_schedule_still_enabled(doc_id):
+    schedule = get_task_schedule_by_name(get_data_doc_schedule_name(doc_id))
+    return bool(schedule and schedule.enabled)
+
+
+def _enqueue_datadoc_retry(
+    doc_id, original_run_kwargs, attempt, parent_run_record_id
+):
+    delay_seconds = min(
+        RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1)),
+        RETRY_MAX_DELAY_SECONDS,
+    )
+    celery.send_task(
+        "tasks.run_datadoc.run_datadoc",
+        kwargs={
+            **original_run_kwargs,
+            "_attempt": attempt + 1,
+            "_parent_run_record_id": parent_run_record_id,
+        },
+        countdown=delay_seconds,
+        shadow=get_data_doc_schedule_name(doc_id),
+    )
+    stats_logger.incr(
+        DATADOC_SCHEDULED_RETRIES,
+        tags={"attempt": str(attempt + 1)},
+    )

@@ -3,6 +3,7 @@ from lib.scheduled_datadoc.validator import (
     validate_dict_keys,
     validate_exporters_config,
     validate_datadoc_schedule_config,
+    validate_timeout_and_retries,
     InvalidScheduleException,
 )
 
@@ -105,3 +106,57 @@ class ValidateDatadocScheduleConfigTestCase(TestCase):
         mock_validate_exporters_config.side_effect = InvalidScheduleException()
         self.assertFalse(validate_datadoc_schedule_config({})[0])
         self.assertTrue(mock_validate_exporters_config.called)
+
+    def test_valid_timeout_and_retries(self):
+        ok, reason = validate_datadoc_schedule_config(
+            {"timeout_seconds": 3600, "max_retries": 3}
+        )
+        self.assertTrue(ok)
+        self.assertEqual(reason, "")
+
+    def test_missing_timeout_and_retries_is_valid(self):
+        ok, _ = validate_datadoc_schedule_config({})
+        self.assertTrue(ok)
+
+    def test_invalid_timeout_too_low(self):
+        ok, _ = validate_datadoc_schedule_config({"timeout_seconds": 30})
+        self.assertFalse(ok)
+
+    def test_invalid_timeout_too_high(self):
+        ok, _ = validate_datadoc_schedule_config({"timeout_seconds": 200_000})
+        self.assertFalse(ok)
+
+    def test_invalid_timeout_wrong_type(self):
+        ok, _ = validate_datadoc_schedule_config({"timeout_seconds": "abc"})
+        self.assertFalse(ok)
+
+    def test_invalid_timeout_bool_rejected(self):
+        ok, _ = validate_datadoc_schedule_config({"timeout_seconds": True})
+        self.assertFalse(ok)
+
+    def test_invalid_max_retries_negative(self):
+        ok, _ = validate_datadoc_schedule_config({"max_retries": -1})
+        self.assertFalse(ok)
+
+    def test_invalid_max_retries_above_limit(self):
+        ok, _ = validate_datadoc_schedule_config({"max_retries": 11})
+        self.assertFalse(ok)
+
+    def test_invalid_max_retries_wrong_type(self):
+        ok, _ = validate_datadoc_schedule_config({"max_retries": "foo"})
+        self.assertFalse(ok)
+
+
+class ValidateTimeoutAndRetriesTestCase(TestCase):
+    def test_none_values_are_allowed(self):
+        validate_timeout_and_retries(
+            {"timeout_seconds": None, "max_retries": None}
+        )
+
+    def test_boundary_timeout_values(self):
+        validate_timeout_and_retries({"timeout_seconds": 60})
+        validate_timeout_and_retries({"timeout_seconds": 172_800})
+
+    def test_boundary_max_retries_values(self):
+        validate_timeout_and_retries({"max_retries": 0})
+        validate_timeout_and_retries({"max_retries": 10})

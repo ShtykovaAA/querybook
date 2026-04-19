@@ -10,10 +10,19 @@ class InvalidScheduleException(Exception):
     pass
 
 
-valid_schedule_config_keys = ["exports", "notifications"]
+valid_schedule_config_keys = [
+    "exports",
+    "notifications",
+    "timeout_seconds",
+    "max_retries",
+]
 valid_export_config_keys = ["exporter_cell_id", "exporter_name", "exporter_params"]
 valid_notification_keys = ["with", "on", "config"]
 valid_notification_config_keys = ["to", "to_user"]
+
+MIN_TIMEOUT_SECONDS = 60
+MAX_TIMEOUT_SECONDS = 172_800  # 2 days — matches Celery task_soft_time_limit
+MAX_RETRIES_LIMIT = 10
 
 
 def validate_datadoc_schedule_config(schedule_config):
@@ -21,9 +30,37 @@ def validate_datadoc_schedule_config(schedule_config):
         validate_dict_keys(schedule_config, valid_schedule_config_keys)
         validate_notifications_config(schedule_config.get("notifications", []))
         validate_exporters_config(schedule_config.get("exports", []))
+        validate_timeout_and_retries(schedule_config)
     except InvalidScheduleException as e:
         return False, str(e)
     return True, ""
+
+
+def validate_timeout_and_retries(schedule_config):
+    if "timeout_seconds" in schedule_config:
+        timeout = schedule_config["timeout_seconds"]
+        if timeout is not None and (
+            not isinstance(timeout, int)
+            or isinstance(timeout, bool)
+            or timeout < MIN_TIMEOUT_SECONDS
+            or timeout > MAX_TIMEOUT_SECONDS
+        ):
+            raise InvalidScheduleException(
+                f"timeout_seconds must be an integer in "
+                f"[{MIN_TIMEOUT_SECONDS}, {MAX_TIMEOUT_SECONDS}]"
+            )
+
+    if "max_retries" in schedule_config:
+        retries = schedule_config["max_retries"]
+        if retries is not None and (
+            not isinstance(retries, int)
+            or isinstance(retries, bool)
+            or retries < 0
+            or retries > MAX_RETRIES_LIMIT
+        ):
+            raise InvalidScheduleException(
+                f"max_retries must be an integer in [0, {MAX_RETRIES_LIMIT}]"
+            )
 
 
 def validate_dict_keys(d: Dict, allowed_keys: List):

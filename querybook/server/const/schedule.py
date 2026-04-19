@@ -5,6 +5,7 @@ class TaskRunStatus(Enum):
     RUNNING = 0
     SUCCESS = 1
     FAILURE = 2
+    TIMEOUT = 3
 
 
 class NotifyOn(Enum):

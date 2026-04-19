@@ -26,6 +26,13 @@ const StyledStatusIcon = styled.div`
             color: var(--color-false);
         }
     }
+
+    &.status-timeout {
+        color: var(--color-orange-dark, #b86e00);
+        * {
+            color: var(--color-orange-dark, #b86e00);
+        }
+    }
 `;
 
 interface IStatusProps {

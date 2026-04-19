@@ -34,6 +34,18 @@ export const DataDocScheduleItem: React.FC<IDataDocScheduleItemProps> = ({
             return null;
         }
 
+        const timeoutSeconds = schedule.kwargs?.timeout_seconds;
+        const maxRetries = schedule.kwargs?.max_retries;
+        const settingsParts: string[] = [];
+        if (timeoutSeconds) {
+            settingsParts.push(
+                `Timeout: ${Math.round(timeoutSeconds / 60)}m`
+            );
+        }
+        if (maxRetries) {
+            settingsParts.push(`Retries: ${maxRetries}`);
+        }
+
         return (
             <div className="DataDocScheduleItem-bottom  horizontal-space-between">
                 <div>
@@ -48,6 +60,15 @@ export const DataDocScheduleItem: React.FC<IDataDocScheduleItemProps> = ({
                             'Disabled'
                         )}
                     </StyledText>
+                    {settingsParts.length > 0 && (
+                        <StyledText
+                            color="light"
+                            size="small"
+                            className="mt4"
+                        >
+                            {settingsParts.join(' · ')}
+                        </StyledText>
+                    )}
                 </div>
                 {lastRecord && (
                     <DataDocScheduleActionHistory
