@@ -21,6 +21,7 @@ from . import query_transform
 from . import github
 from . import query_review
 from . import python_cell
+from . import env_config
 
 # Keep this at the end of imports to make sure the plugin APIs override the default ones
 try:
@@ -53,3 +54,4 @@ api_plugin
 github
 query_review
 python_cell
+env_config

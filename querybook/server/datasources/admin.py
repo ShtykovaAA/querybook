@@ -10,6 +10,10 @@ from lib.engine_status_checker import (
     ALL_ENGINE_STATUS_CHECKERS,
     get_engine_checker_class,
 )
+from lib.env_config import (
+    is_env_managed_engine_id,
+    is_env_managed_metastore_id,
+)
 from lib.metastore.all_loaders import ALL_METASTORE_LOADERS
 from lib.table_upload.exporter.exporter_factory import ALL_TABLE_UPLOAD_EXPORTER_BY_NAME
 from lib.query_executor.all_executors import (
@@ -22,6 +26,30 @@ from logic import user as user_logic
 from logic import environment as environment_logic
 from logic import demo as demo_logic
 from models.admin import Announcement, QueryMetastore, QueryEngine, AdminAuditLog
+
+
+_ENV_ENGINE_FORBIDDEN = (
+    "This query engine is managed via environment variables and is read-only."
+)
+_ENV_METASTORE_FORBIDDEN = (
+    "This metastore is managed via environment variables and is read-only."
+)
+
+
+def _assert_engine_writable(engine_id):
+    api_assert(
+        not is_env_managed_engine_id(engine_id),
+        message=_ENV_ENGINE_FORBIDDEN,
+        status_code=403,
+    )
+
+
+def _assert_metastore_writable(metastore_id):
+    api_assert(
+        not is_env_managed_metastore_id(metastore_id),
+        message=_ENV_METASTORE_FORBIDDEN,
+        status_code=403,
+    )
 
 
 @register(
@@ -144,6 +172,13 @@ def create_query_engine(
     description=None,
     metastore_id=None,
 ):
+    from lib.env_config import get_env_query_engine_by_name
+
+    api_assert(
+        get_env_query_engine_by_name(name) is None,
+        message=f"A query engine named '{name}' is already managed via environment variables.",
+        status_code=409,
+    )
     with DBSession() as session:
         query_engine = QueryEngine.create(
             {
@@ -196,6 +231,7 @@ def test_query_engine_connection(
 @admin_only
 @with_admin_audit_log(AdminItemType.QueryEngine, AdminOperation.UPDATE)
 def update_query_engine(id, **fields_to_update):
+    _assert_engine_writable(id)
     with DBSession() as session:
         query_engine = QueryEngine.update(
             id,
@@ -226,6 +262,7 @@ def update_query_engine(id, **fields_to_update):
 def delete_query_engine(
     id,
 ):
+    _assert_engine_writable(id)
     logic.delete_query_engine_by_id(id)
 
 
@@ -238,6 +275,7 @@ def delete_query_engine(
 def recover_query_engine(
     id,
 ):
+    _assert_engine_writable(id)
     logic.recover_query_engine_by_id(id)
 
 
@@ -278,6 +316,13 @@ def create_metastore(
     loader,
     acl_control=None,
 ):
+    from lib.env_config import get_env_metastore_by_name
+
+    api_assert(
+        get_env_metastore_by_name(name) is None,
+        message=f"A metastore named '{name}' is already managed via environment variables.",
+        status_code=409,
+    )
     with DBSession() as session:
         # TODO: validate executor params
         metastore = QueryMetastore.create(
@@ -303,6 +348,7 @@ def update_metastore(
     id,
     **fields,
 ):
+    _assert_metastore_writable(id)
     with DBSession() as session:
         metastore = QueryMetastore.update(
             id=id,
@@ -326,6 +372,7 @@ def create_metastore_schedule(
     id,
     cron,
 ):
+    _assert_metastore_writable(id)
     with DBSession() as session:
         return logic.create_query_metastore_update_schedule(
             metastore_id=id, cron=cron, session=session
@@ -341,6 +388,7 @@ def create_metastore_schedule(
 def recover_metastore(
     id,
 ):
+    _assert_metastore_writable(id)
     logic.recover_query_metastore_by_id(id)
 
 
@@ -353,6 +401,7 @@ def recover_metastore(
 def delete_metastore(
     id,
 ):
+    _assert_metastore_writable(id)
     logic.delete_query_metastore_by_id(id)
 
 
@@ -491,6 +540,7 @@ def get_query_engine_in_environment(id):
 @admin_only
 @with_admin_audit_log(AdminItemType.Environment, AdminOperation.UPDATE)
 def add_query_engine_to_environment(id, engine_id):
+    _assert_engine_writable(engine_id)
     return logic.add_query_engine_to_environment(id, engine_id)
 
 
@@ -510,6 +560,7 @@ def swap_query_engine_order_in_environment(id, from_index, to_index):
 @admin_only
 @with_admin_audit_log(AdminItemType.Environment, AdminOperation.UPDATE)
 def remove_query_engine_from_environment(id, engine_id):
+    _assert_engine_writable(engine_id)
     logic.remove_query_engine_from_environment(id, engine_id)
 
 

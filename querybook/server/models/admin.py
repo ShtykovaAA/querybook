@@ -115,6 +115,7 @@ class QueryEngine(CRUDMixin, Base):
             "metastore_id": self.metastore_id,
             "feature_params": self.get_feature_params(),
             "executor": self.executor,
+            "is_env_managed": False,
         }
 
     def to_dict_admin(self):
@@ -132,6 +133,7 @@ class QueryEngine(CRUDMixin, Base):
             "executor_params": self.get_engine_params(),
             "feature_params": self.get_feature_params(),
             "environments": self.environments,
+            "is_env_managed": False,
         }
 
     def get_engine_params(self):
@@ -165,6 +167,7 @@ class QueryMetastore(CRUDMixin, Base):
             "name": self.name,
             "config": loader_class.loader_config.to_dict(),
             "owner_types": [t._asdict() for t in loader_class.get_table_owner_types()],
+            "is_env_managed": False,
         }
 
         if with_flags:
@@ -186,6 +189,7 @@ class QueryMetastore(CRUDMixin, Base):
             "loader": self.loader,
             "metastore_params": self.metastore_params,
             "acl_control": self.acl_control,
+            "is_env_managed": False,
         }
 
 
