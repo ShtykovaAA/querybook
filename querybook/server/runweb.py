@@ -16,9 +16,15 @@ import gevent.pywsgi
 import gevent.socket
 
 from app.server import flask_app
+from app.flask_app import sync_env_config
 
 
 def main():
+    # Run env-config sync after all app modules are fully imported.
+    # Doing this from flask_app at module-load time triggers a circular
+    # import (db_sync -> logic.admin -> logic.schedule -> app.flask_app).
+    sync_env_config()
+
     host = "0.0.0.0"
     port = 5000
     if len(sys.argv) > 1:

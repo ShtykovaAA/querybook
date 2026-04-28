@@ -218,7 +218,6 @@ def make_static_plugin_blue_print(app, limiter):
 
 
 validate_db()
-sync_env_config()
 flask_app = make_flask_app()
 limiter = make_limiter(flask_app)
 make_blue_print(flask_app, limiter)

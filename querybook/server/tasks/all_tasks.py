@@ -48,6 +48,12 @@ LOG = get_task_logger(__name__)
 
 @celeryd_init.connect
 def configure_workers(sender=None, conf=None, **kwargs):
+    # Sync env-managed connections to DB shadow rows. Runs once per
+    # worker / beat process at startup. See lib.env_config.db_sync.
+    from app.flask_app import sync_env_config
+
+    sync_env_config()
+
     if QuerybookSettings.PRODUCTION:
         LOG.info(f"Starting PROD Celery worker: {sender}")
 
