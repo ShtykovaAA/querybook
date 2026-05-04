@@ -15,13 +15,29 @@ case "$SERVICE_NAME" in
     COMMAND="python3 querybook/server/runweb.py"
     ;;
 "worker")
-    COMMAND="watchmedo auto-restart -d querybook -p '*.py' -R -- celery -A tasks.all_tasks worker -E --without-heartbeat --without-gossip --without-mingle --loglevel=DEBUG"
+    # watchmedo provides dev hot-reload but uses inotify, which fails on
+    # macOS Docker Desktop (Errno 38 Function not implemented) and any
+    # other filesystem without inotify support. Set DISABLE_WATCHMEDO=true
+    # in those environments to skip the wrapper.
+    if [ "$DISABLE_WATCHMEDO" = "true" ]; then
+        COMMAND="celery -A tasks.all_tasks worker -E --without-heartbeat --without-gossip --without-mingle --loglevel=DEBUG"
+    else
+        COMMAND="watchmedo auto-restart -d querybook -p '*.py' -R -- celery -A tasks.all_tasks worker -E --without-heartbeat --without-gossip --without-mingle --loglevel=DEBUG"
+    fi
     ;;
 "scheduler")
-    COMMAND="watchmedo auto-restart -d querybook -p '*.py' -R -- celery -A tasks.all_tasks beat -S scheduler.DatabaseScheduler --loglevel=INFO"
+    if [ "$DISABLE_WATCHMEDO" = "true" ]; then
+        COMMAND="celery -A tasks.all_tasks beat -S scheduler.DatabaseScheduler --loglevel=INFO"
+    else
+        COMMAND="watchmedo auto-restart -d querybook -p '*.py' -R -- celery -A tasks.all_tasks beat -S scheduler.DatabaseScheduler --loglevel=INFO"
+    fi
     ;;
 "worker_scheduler") # FIXME: this doesn't schedule task as desired
-    COMMAND="watchmedo auto-restart -d querybook -p '*.py' -R -- celery -A tasks.all_tasks worker --beat --scheduler scheduler.DatabaseScheduler --loglevel=DEBUG"
+    if [ "$DISABLE_WATCHMEDO" = "true" ]; then
+        COMMAND="celery -A tasks.all_tasks worker --beat --scheduler scheduler.DatabaseScheduler --loglevel=DEBUG"
+    else
+        COMMAND="watchmedo auto-restart -d querybook -p '*.py' -R -- celery -A tasks.all_tasks worker --beat --scheduler scheduler.DatabaseScheduler --loglevel=DEBUG"
+    fi
     ;;
 
 "prod_web")

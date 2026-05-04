@@ -1,4 +1,4 @@
-from celery.signals import celeryd_init, task_failure
+from celery.signals import beat_init, celeryd_init, task_failure
 from celery.utils.log import get_task_logger
 from importlib import import_module
 
@@ -49,7 +49,7 @@ LOG = get_task_logger(__name__)
 @celeryd_init.connect
 def configure_workers(sender=None, conf=None, **kwargs):
     # Sync env-managed connections to DB shadow rows. Runs once per
-    # worker / beat process at startup. See lib.env_config.db_sync.
+    # worker process at startup. See lib.env_config.db_sync.
     from app.flask_app import sync_env_config
 
     sync_env_config()
@@ -62,6 +62,17 @@ def configure_workers(sender=None, conf=None, **kwargs):
         clean_up_query_execution()
     else:
         LOG.info(f"Starting DEV Celery worker: {sender}")
+
+
+@beat_init.connect
+def configure_beat(sender=None, **kwargs):
+    # celeryd_init does NOT fire for `celery beat` (scheduler) — it has
+    # its own beat_init signal. Without this, sync would only happen if
+    # a worker / web pod is also up. Cover the scheduler-only case.
+    from app.flask_app import sync_env_config
+
+    sync_env_config()
+    LOG.info(f"Celery beat (scheduler) ready: {sender}")
 
 
 @task_failure.connect
