@@ -1,7 +1,7 @@
 import threading
 from typing import Dict, List, Optional
 
-from lib.env_config.loader import load_env_metastores, load_env_query_engines
+from lib.env_config.loader import load_all_metastores, load_all_query_engines
 from lib.env_config.models import ENV_ID_BASE, EnvQueryEngine, EnvQueryMetastore
 
 
@@ -19,8 +19,8 @@ def _ensure_loaded() -> None:
     with _lock:
         if _engines_by_name is not None:
             return
-        metastores = load_env_metastores()
-        engines = load_env_query_engines()
+        metastores = load_all_metastores()
+        engines = load_all_query_engines()
         _metastores_by_name = metastores
         _metastores_by_id = {m.id: m for m in metastores.values()}
         _engines_by_name = engines

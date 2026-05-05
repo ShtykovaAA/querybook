@@ -57,6 +57,10 @@ class EnvQueryMetastore:
         return d
 
     def to_dict_admin(self) -> Dict[str, Any]:
+        # IMPORTANT: returns real metastore_params — the loader reads this
+        # dict at runtime to open the metastore connection.
+        # Secret masking for the admin API happens at the datasource layer
+        # (see datasources/admin.py:_mask_env_managed_metastore).
         return {
             "id": self.id,
             "created_at": self.created_at,
@@ -177,6 +181,9 @@ class EnvQueryEngine:
         }
 
     def to_dict_admin(self) -> Dict[str, Any]:
+        # IMPORTANT: returns real executor_params. Secret masking for the
+        # admin API happens at the datasource layer
+        # (see datasources/admin.py:_mask_env_managed_engine).
         return {
             "id": self.id,
             "created_at": self.created_at,

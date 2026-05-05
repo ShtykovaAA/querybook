@@ -227,21 +227,35 @@ def _mark_orphans_deleted(session, live_ids: List[int], model) -> int:
             synchronize_session=False,
         )
     )
-    # For engines, also drop env-environment bindings — the engine should
-    # disappear from the dropdown immediately, even before cleanup endpoint
-    # is called.
-    if model is QueryEngine:
-        orphan_ids = [
-            row_id
-            for (row_id,) in session.query(QueryEngine.id)
-            .filter(QueryEngine.id >= ENV_ID_BASE)
-            .filter(~QueryEngine.id.in_(live_ids) if live_ids else True)
-            .all()
-        ]
-        if orphan_ids:
-            session.query(QueryEngineEnvironment).filter(
-                QueryEngineEnvironment.query_engine_id.in_(orphan_ids)
-            ).delete(synchronize_session=False)
+    # Compute the set of orphan ids in the env range — used by both the
+    # engine and metastore branches below.
+    orphan_ids = [
+        row_id
+        for (row_id,) in session.query(model.id)
+        .filter(model.id >= ENV_ID_BASE)
+        .filter(~model.id.in_(live_ids) if live_ids else True)
+        .all()
+    ]
+
+    if model is QueryEngine and orphan_ids:
+        # Drop env↔environment bindings so the engine disappears from the
+        # dropdown immediately, even before cleanup-endpoint is called.
+        session.query(QueryEngineEnvironment).filter(
+            QueryEngineEnvironment.query_engine_id.in_(orphan_ids)
+        ).delete(synchronize_session=False)
+
+    if model is QueryMetastore and orphan_ids:
+        # Remove the task_schedule rows that drive periodic update_metastore
+        # for metastores that no longer have a live env config — otherwise
+        # beat keeps triggering tasks for soft-deleted shadows.
+        from logic.admin import get_metastore_schedule_job_name
+        from models.schedule import TaskSchedule
+
+        schedule_names = [get_metastore_schedule_job_name(i) for i in orphan_ids]
+        session.query(TaskSchedule).filter(
+            TaskSchedule.name.in_(schedule_names)
+        ).delete(synchronize_session=False)
+
     return result
 
 

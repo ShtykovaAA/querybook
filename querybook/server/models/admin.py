@@ -15,6 +15,17 @@ from lib.sqlalchemy import CRUDMixin
 Base = db.Base
 
 
+def _is_in_env_id_range(obj_id) -> bool:
+    """A row is a shadow of an env-managed object if its id is in the
+    reserved range. Imported here lazily to avoid pulling lib.env_config at
+    module load time (it imports models too)."""
+    if obj_id is None:
+        return False
+    from lib.env_config.models import ENV_ID_BASE
+
+    return obj_id >= ENV_ID_BASE
+
+
 class Announcement(CRUDMixin, Base):
     __tablename__ = "announcements"
     __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
@@ -115,7 +126,7 @@ class QueryEngine(CRUDMixin, Base):
             "metastore_id": self.metastore_id,
             "feature_params": self.get_feature_params(),
             "executor": self.executor,
-            "is_env_managed": False,
+            "is_env_managed": _is_in_env_id_range(self.id),
         }
 
     def to_dict_admin(self):
@@ -133,7 +144,7 @@ class QueryEngine(CRUDMixin, Base):
             "executor_params": self.get_engine_params(),
             "feature_params": self.get_feature_params(),
             "environments": self.environments,
-            "is_env_managed": False,
+            "is_env_managed": _is_in_env_id_range(self.id),
         }
 
     def get_engine_params(self):
@@ -167,7 +178,7 @@ class QueryMetastore(CRUDMixin, Base):
             "name": self.name,
             "config": loader_class.loader_config.to_dict(),
             "owner_types": [t._asdict() for t in loader_class.get_table_owner_types()],
-            "is_env_managed": False,
+            "is_env_managed": _is_in_env_id_range(self.id),
         }
 
         if with_flags:
@@ -189,7 +200,7 @@ class QueryMetastore(CRUDMixin, Base):
             "loader": self.loader,
             "metastore_params": self.metastore_params,
             "acl_control": self.acl_control,
-            "is_env_managed": False,
+            "is_env_managed": _is_in_env_id_range(self.id),
         }
 
 

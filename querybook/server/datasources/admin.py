@@ -52,6 +52,27 @@ def _assert_metastore_writable(metastore_id):
     )
 
 
+def _mask_env_managed_engine(engine_dict):
+    """Strip secrets from the admin-API view of an env-managed engine.
+    The shadow row in the DB stores executor_params={} already, but env
+    objects expose real params (the loader needs them at runtime). Mask
+    them only when serializing for the API."""
+    if engine_dict.get("is_env_managed"):
+        engine_dict = {**engine_dict, "executor_params": {}}
+    return engine_dict
+
+
+def _mask_env_managed_metastore(metastore_dict):
+    """Same as _mask_env_managed_engine, for metastores."""
+    if metastore_dict.get("is_env_managed"):
+        metastore_dict = {
+            **metastore_dict,
+            "metastore_params": {},
+            "acl_control": {},
+        }
+    return metastore_dict
+
+
 @register(
     "/announcement/",
     methods=["GET"],
@@ -153,8 +174,9 @@ def get_query_engine_status_checkers():
 def get_all_query_engines_admin():
     with DBSession() as session:
         engines = QueryEngine.get_all(session=session)
-        engines_dict = [engine.to_dict_admin() for engine in engines]
-        return engines_dict
+        return [
+            _mask_env_managed_engine(engine.to_dict_admin()) for engine in engines
+        ]
 
 
 @register(
@@ -298,10 +320,10 @@ def get_all_query_metastore_loaders_admin():
 def get_all_query_metastores_admin():
     with DBSession() as session:
         metastores = logic.get_all_query_metastore(session=session)
-        metastores_dict = [metastore.to_dict_admin() for metastore in metastores]
-        return metastores_dict
-
-    return []
+        return [
+            _mask_env_managed_metastore(metastore.to_dict_admin())
+            for metastore in metastores
+        ]
 
 
 @register(
