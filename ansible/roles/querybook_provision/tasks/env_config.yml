@@ -1,0 +1,50 @@
+---
+# Render two artefacts:
+#
+#   1. connections.yml — declarative engines & metastores, no secrets.
+#      Path is `querybook_connections_file_path`. Secrets in JSON values
+#      are referenced via ${VAR} placeholders.
+#      Best as a k8s ConfigMap or a docker volume.
+#
+#   2. env-config file — contains the QUERYBOOK_CONNECTIONS_FILE pointer
+#      and any KEY=value secrets used by ${VAR} substitution.
+#      Path is `querybook_env_file_path`. Best as a k8s Secret.
+#
+# Querybook on startup (lib/env_config/loader.py) reads connections.yml
+# and merges with QUERYBOOK_QUERY_ENGINE_* / QUERYBOOK_METASTORE_* env
+# vars (env wins on name collision). Shadow rows in DB are created /
+# updated by sync_env_to_db().
+
+- name: "Ensure parent directory for connections file exists"
+  ansible.builtin.file:
+    path: "{{ querybook_connections_file_path | dirname }}"
+    state: directory
+    mode: "0750"
+
+- name: "Render connections.yml at {{ querybook_connections_file_path }}"
+  ansible.builtin.template:
+    src: connections.yml.j2
+    dest: "{{ querybook_connections_file_path }}"
+    mode: "0644"
+  register: qb_connections_rendered
+
+- name: "Ensure parent directory for env-config file exists"
+  ansible.builtin.file:
+    path: "{{ querybook_env_file_path | dirname }}"
+    state: directory
+    mode: "0750"
+
+- name: "Render env-config (secrets + CONNECTIONS_FILE pointer) at {{ querybook_env_file_path }}"
+  ansible.builtin.template:
+    src: querybook_env_config.env.j2
+    dest: "{{ querybook_env_file_path }}"
+    mode: "0600"
+  register: qb_env_config_rendered
+
+- name: "Hint: env-config or connections changed — restart querybook services to pick it up"
+  ansible.builtin.debug:
+    msg: >-
+      One of {{ querybook_env_file_path }} / {{ querybook_connections_file_path }}
+      changed. Restart querybook web, worker, and scheduler so
+      sync_env_to_db() runs again with the new values.
+  when: qb_env_config_rendered.changed or qb_connections_rendered.changed

@@ -1,0 +1,60 @@
+---
+querybook_environments:
+  - name: analytics
+    description: "Analytics workspace"
+    public: false
+    hidden: false
+    shareable: true
+    image: ""
+    members:
+      - analyst
+
+# Query engines and metastores defined here are rendered into the env-config
+# file by tasks/env_config.yml. On querybook startup the lib/env_config/
+# loader picks them up and creates shadow rows in the DB. Secrets are NOT
+# stored in the DB — they live only in env vars.
+#
+# `executor_params.connection_string` may reference ${VAR} placeholders;
+# those names must exist in querybook_env_extra_secrets (secrets.yml) and
+# the same env file gets rendered with both. Querybook's loader does the
+# substitution at runtime.
+#
+# `environments: [...]` lists Querybook environment names that the engine
+# should appear under in the UI. Use the same name(s) as in
+# querybook_environments above.
+#
+# `metastore_name` (optional) cross-references one of the metastores below.
+
+querybook_env_query_engines:
+  - name: sqlite_demo
+    description: "Local SQLite demo engine (managed via env)"
+    language: sqlite
+    executor: sqlalchemy
+    executor_params:
+      connection_string: "sqlite:///demo/demo_data.db"
+    feature_params:
+      status_checker: NullChecker
+    environments:
+      - analytics
+  # Real example — uncomment and fill in:
+  # - name: prod_pg
+  #   description: "Production Postgres"
+  #   language: postgresql
+  #   executor: sqlalchemy
+  #   executor_params:
+  #     connection_string: "postgresql+psycopg2://user:${QUERYBOOK_PROD_PG_PASSWORD}@db.host:5432/db?sslmode=disable"
+  #   metastore_name: prod_pg_meta
+  #   environments:
+  #     - analytics
+
+querybook_env_metastores: []
+  # - name: prod_pg_meta
+  #   loader: SqlAlchemyMetastoreLoader
+  #   metastore_params:
+  #     connection_string: "postgresql+psycopg2://user:${QUERYBOOK_PROD_PG_PASSWORD}@db.host:5432/db?sslmode=disable"
+  #   update_cron: "0 * * * *"
+
+querybook_users:
+  - username: analyst
+    email: "analyst@example.com"
+    password_secret: analyst

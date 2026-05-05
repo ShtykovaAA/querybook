@@ -1,0 +1,66 @@
+---
+# Querybook's default (password) auth backend has no admin-only user creation
+# endpoint — users self-register via /ds/signup/, and the first signup becomes
+# admin automatically (logic/user.py:create_admin_when_no_admin). We therefore
+# try to log in first; if that fails, we sign up (which will grant admin on a
+# fresh install). The cookies from a successful login are reused for every
+# subsequent admin API call.
+
+- name: Try to log in as admin
+  ansible.builtin.uri:
+    url: "{{ querybook_ds_url }}/login/"
+    method: POST
+    body_format: json
+    body:
+      username: "{{ querybook_admin.username }}"
+      password: "{{ querybook_admin.password }}"
+    status_code: [200, 401, 403, 500]
+    return_content: true
+  register: qb_login_attempt
+
+- name: Sign up admin if login failed (first signup is auto-admin)
+  ansible.builtin.uri:
+    url: "{{ querybook_ds_url }}/signup/"
+    method: POST
+    body_format: json
+    body:
+      username: "{{ querybook_admin.username }}"
+      password: "{{ querybook_admin.password }}"
+      email: "{{ querybook_admin.email }}"
+    status_code: [200]
+    return_content: true
+  when: qb_login_attempt.status != 200
+
+- name: Log in as admin to obtain session cookie
+  ansible.builtin.uri:
+    url: "{{ querybook_ds_url }}/login/"
+    method: POST
+    body_format: json
+    body:
+      username: "{{ querybook_admin.username }}"
+      password: "{{ querybook_admin.password }}"
+    status_code: [200]
+    return_content: true
+  register: qb_login
+
+- name: Store admin cookie for later tasks
+  ansible.builtin.set_fact:
+    querybook_admin_cookie: "{{ qb_login.cookies_string }}"
+
+- name: Verify admin privileges by hitting an @admin_only endpoint
+  ansible.builtin.uri:
+    url: "{{ querybook_ds_url }}/admin/environment/"
+    method: GET
+    headers:
+      Cookie: "{{ querybook_admin_cookie }}"
+    status_code: [200, 403]
+    return_content: true
+  register: qb_admin_probe
+
+- name: Fail if configured admin account is not admin
+  ansible.builtin.fail:
+    msg: >-
+      Configured querybook_admin user does not have the admin role —
+      /ds/admin/* endpoints are returning 403.
+      Either grant the admin role manually or use an account that already has it.
+  when: qb_admin_probe.status != 200

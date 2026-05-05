@@ -1,0 +1,13 @@
+---
+querybook_ds_url: "{{ querybook_base_url }}/ds"
+
+# Where to write the YAML file with declarative query engines and metastores.
+# Querybook reads this file when QUERYBOOK_CONNECTIONS_FILE is set to it.
+# In k8s this is a good fit for a ConfigMap (no secrets inside — only ${VAR}
+# placeholders).
+querybook_connections_file_path: "/etc/querybook/connections.yml"
+
+# Where to write the env-config file. It contains the
+# QUERYBOOK_CONNECTIONS_FILE pointer plus any KEY=value secrets needed by
+# ${VAR} substitutions inside connections.yml. In k8s this fits a Secret.
+querybook_env_file_path: "/etc/querybook/env-config.env"

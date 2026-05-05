@@ -1,0 +1,7 @@
+---
+querybook_base_url: "http://localhost:10001"
+
+querybook_admin:
+  username: "admin"
+  password: "admin-change-me"
+  email: "admin@example.com"
