@@ -221,6 +221,33 @@ function groupRecords(records: ITaskStatusRecord[]): IRecordGroup[] {
 
 const TIMEOUT_TOOLTIP = 'Cancelled after exceeding the configured timeout';
 
+const COL_CHEVRON_PX = 32;
+const COL_ID_PX = 160;
+const COL_DATE_PX = 140;
+const COL_STATUS_PX = 90;
+
+const RunRecordHeader: React.FC = () => (
+    <div
+        style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '8px 0',
+            borderBottom: '1px solid var(--bg-lightest)',
+            fontWeight: 'bold',
+            fontSize: 12,
+            color: 'var(--text-light)',
+        }}
+    >
+        <div style={{ width: COL_CHEVRON_PX }} />
+        <div style={{ width: COL_ID_PX }}>ID</div>
+        <div style={{ width: COL_DATE_PX }}>Started</div>
+        <div style={{ width: COL_DATE_PX }}>Updated</div>
+        <div style={{ width: COL_STATUS_PX }}>Status</div>
+        <div style={{ flex: 1, minWidth: 0 }}>Error</div>
+    </div>
+);
+
 const RecordRow: React.FC<{
     record: ITaskStatusRecord;
     expanded: boolean;
@@ -240,18 +267,24 @@ const RecordRow: React.FC<{
             }}
         >
             <div
-                className="horizontal-space-between"
-                style={{ gap: 12 }}
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '8px 0',
+                }}
                 aria-label={isTimeout ? TIMEOUT_TOOLTIP : undefined}
                 data-balloon-pos={isTimeout ? 'up' : undefined}
             >
-                <IconButton
-                    icon={expanded ? 'ChevronDown' : 'ChevronRight'}
-                    onClick={onToggle}
-                    noPadding
-                    title="Expand"
-                />
-                <div style={{ flex: 1, minWidth: 80 }}>
+                <div style={{ width: COL_CHEVRON_PX, flexShrink: 0 }}>
+                    <IconButton
+                        icon={expanded ? 'ChevronDown' : 'ChevronRight'}
+                        onClick={onToggle}
+                        noPadding
+                        tooltip="Expand"
+                    />
+                </div>
+                <div style={{ width: COL_ID_PX, flexShrink: 0 }}>
                     <b>#{record.id}</b>
                     {label ? (
                         <StyledText
@@ -263,20 +296,21 @@ const RecordRow: React.FC<{
                         </StyledText>
                     ) : null}
                 </div>
-                <div style={{ flex: 2 }}>
+                <div style={{ width: COL_DATE_PX, flexShrink: 0 }}>
                     {generateFormattedDate(record.created_at, 'X')}
                 </div>
-                <div style={{ flex: 2 }}>
+                <div style={{ width: COL_DATE_PX, flexShrink: 0 }}>
                     {generateFormattedDate(record.updated_at, 'X')}
                 </div>
-                <div style={{ flex: 1 }}>
+                <div style={{ width: COL_STATUS_PX, flexShrink: 0 }}>
                     <TaskStatusIcon type={record.status} />
                 </div>
                 <div
                     style={{
-                        flex: 5,
+                        flex: 1,
+                        minWidth: 0,
                         whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-all',
+                        wordBreak: 'break-word',
                     }}
                 >
                     {record.error_message ? (
@@ -331,36 +365,42 @@ const MultiAttemptGroup: React.FC<{
             }}
         >
             <div
-                className="horizontal-space-between"
-                style={{ gap: 12 }}
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '8px 0',
+                }}
                 aria-label={groupTooltip}
                 data-balloon-pos="up"
             >
-                <IconButton
-                    icon={expanded ? 'ChevronDown' : 'ChevronRight'}
-                    onClick={onToggle}
-                    noPadding
-                    title="Expand attempts"
-                />
-                <div style={{ flex: 1, minWidth: 80 }}>
+                <div style={{ width: COL_CHEVRON_PX, flexShrink: 0 }}>
+                    <IconButton
+                        icon={expanded ? 'ChevronDown' : 'ChevronRight'}
+                        onClick={onToggle}
+                        noPadding
+                        tooltip="Expand attempts"
+                    />
+                </div>
+                <div style={{ width: COL_ID_PX, flexShrink: 0 }}>
                     <b>#{group.parentId}</b>
                     <StyledText color="light" size="small" className="ml4">
                         Attempt {group.finalRecord.attempt ?? 1} of {total}
                     </StyledText>
                 </div>
-                <div style={{ flex: 2 }}>
+                <div style={{ width: COL_DATE_PX, flexShrink: 0 }}>
                     {generateFormattedDate(first.created_at, 'X')}
                 </div>
-                <div style={{ flex: 2 }}>
+                <div style={{ width: COL_DATE_PX, flexShrink: 0 }}>
                     {generateFormattedDate(
                         group.finalRecord.updated_at,
                         'X'
                     )}
                 </div>
-                <div style={{ flex: 1 }}>
+                <div style={{ width: COL_STATUS_PX, flexShrink: 0 }}>
                     <TaskStatusIcon type={group.finalRecord.status} />
                 </div>
-                <div style={{ flex: 5 }} />
+                <div style={{ flex: 1, minWidth: 0 }} />
             </div>
             {expanded && (
                 <div className="mt8">
@@ -409,6 +449,7 @@ export const DataDocScheduleRunLogs: React.FunctionComponent<{
 
     return (
         <div>
+            <RunRecordHeader />
             {groups.map((group) =>
                 group.attempts.length === 1 ? (
                     <SingleAttemptGroup
