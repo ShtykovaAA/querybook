@@ -1,0 +1,2 @@
+class DataDocRunTimeoutException(Exception):
+    pass
