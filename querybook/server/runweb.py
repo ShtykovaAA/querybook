@@ -16,6 +16,18 @@ import gevent.pywsgi
 import gevent.socket
 
 from app.server import flask_app
+from app.flask_app import sync_env_config
+
+
+# Run env-config sync at module level (after all app modules are fully
+# imported). Doing this from flask_app.py at its own module-load time
+# triggers a circular import (db_sync -> logic.admin -> logic.schedule
+# -> app.flask_app). At this point flask_app is fully loaded.
+#
+# This fires both for `python runweb.py` (dev) and for uwsgi loading
+# runweb as a WSGI module (prod / k8s with helm chart in `prod_web`
+# mode), so sync runs in both deployment styles.
+sync_env_config()
 
 
 def main():

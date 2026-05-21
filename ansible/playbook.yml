@@ -1,0 +1,6 @@
+---
+- name: Provision Querybook environments, engines, and users
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - querybook_provision

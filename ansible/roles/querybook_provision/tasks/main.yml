@@ -1,0 +1,20 @@
+---
+- name: Render env-managed query engines and metastores
+  ansible.builtin.include_tasks: env_config.yml
+
+- name: Bootstrap admin session
+  ansible.builtin.include_tasks: admin_bootstrap.yml
+
+- name: Ensure users exist
+  ansible.builtin.include_tasks: user.yml
+  loop: "{{ querybook_users }}"
+  loop_control:
+    loop_var: user_spec
+    label: "{{ user_spec.username }}"
+
+- name: Ensure environments exist and are configured
+  ansible.builtin.include_tasks: environment.yml
+  loop: "{{ querybook_environments }}"
+  loop_control:
+    loop_var: env_spec
+    label: "{{ env_spec.name }}"

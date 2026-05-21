@@ -1,0 +1,27 @@
+---
+# Creates a user via /ds/signup/ if it does not already exist. Since signup
+# doesn't require authentication and logs the new user in, we issue it as an
+# isolated request and discard its cookies — our admin session is unaffected.
+
+- name: "Look up user {{ user_spec.username }}"
+  ansible.builtin.uri:
+    url: "{{ querybook_ds_url }}/user/name/{{ user_spec.username }}/"
+    method: GET
+    headers:
+      Cookie: "{{ querybook_admin_cookie }}"
+    status_code: [200, 404]
+    return_content: true
+  register: qb_user_lookup
+
+- name: "Sign up user {{ user_spec.username }}"
+  ansible.builtin.uri:
+    url: "{{ querybook_ds_url }}/signup/"
+    method: POST
+    body_format: json
+    body:
+      username: "{{ user_spec.username }}"
+      password: "{{ querybook_user_password_secrets[user_spec.password_secret] }}"
+      email: "{{ user_spec.email }}"
+    status_code: [200]
+    return_content: true
+  when: qb_user_lookup.status == 404

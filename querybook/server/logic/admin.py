@@ -7,6 +7,19 @@ from datetime import date
 
 from app.db import with_session
 
+from lib.env_config import (
+    get_env_metastore_by_id,
+    get_env_metastore_by_name,
+    get_env_metastores,
+    get_env_query_engine_by_id,
+    get_env_query_engine_by_name,
+    get_env_query_engines,
+    get_env_query_engines_by_environment_name,
+    is_env_managed_engine_id,
+    is_env_managed_metastore_id,
+)
+from lib.env_config.exc import EnvManagedReadOnlyError
+from lib.logger import get_logger
 from models.admin import (
     QueryEngine,
     QueryEngineEnvironment,
@@ -20,6 +33,22 @@ from logic.schedule import (
     get_task_schedule_by_name,
 )
 
+LOG = get_logger(__file__)
+
+
+def _merge_by_name(env_objs, db_objs):
+    """Merge env and DB objects by name. Env objects override DB on name conflict."""
+    env_names = {obj.name for obj in env_objs}
+    merged = list(env_objs)
+    for db_obj in db_objs:
+        if db_obj.name in env_names:
+            LOG.warning(
+                f"DB record '{db_obj.name}' shadowed by env-managed override"
+            )
+            continue
+        merged.append(db_obj)
+    return merged
+
 
 """
     ---------------------------------------------------------------------------------------------------------
@@ -30,17 +59,31 @@ from logic.schedule import (
 
 @with_session
 def get_query_engine_by_id(id, session=None):
+    env_engine = get_env_query_engine_by_id(id)
+    if env_engine is not None:
+        return env_engine
     return session.query(QueryEngine).get(id)
 
 
 @with_session
 def get_query_engines_by_ids(ids, session=None):
-    return session.query(QueryEngine).filter(QueryEngine.id.in_(ids)).all()
+    env_matches = [
+        e for e in (get_env_query_engine_by_id(i) for i in ids) if e is not None
+    ]
+    db_ids = [i for i in ids if not is_env_managed_engine_id(i)]
+    db_matches = (
+        session.query(QueryEngine).filter(QueryEngine.id.in_(db_ids)).all()
+        if db_ids
+        else []
+    )
+    # Same-name conflicts cannot happen here (lookup is by ID), so just concat.
+    return env_matches + db_matches
 
 
 @with_session
 def get_all_query_engines(session=None):
-    return session.query(QueryEngine).all()
+    db_engines = session.query(QueryEngine).all()
+    return _merge_by_name(get_env_query_engines(), db_engines)
 
 
 @with_session
@@ -55,7 +98,17 @@ def get_query_engines_by_environment(environment_id, ordered=False, session=None
     if ordered:
         query = query.order_by(QueryEngineEnvironment.engine_order)
 
-    return query.all()
+    db_engines = query.all()
+
+    # Resolve environment_id → name to filter env-engines.
+    from logic.environment import get_environment_by_id
+
+    env_engines = []
+    environment = get_environment_by_id(environment_id, session=session)
+    if environment is not None:
+        env_engines = get_env_query_engines_by_environment_name(environment.name)
+
+    return _merge_by_name(env_engines, db_engines)
 
 
 @with_session
@@ -150,7 +203,11 @@ def swap_query_engine_order_in_environment(
 
 @with_session
 def delete_query_engine_by_id(id, commit=True, session=None):
-    query_engine = get_query_engine_by_id(id, session=session)
+    if is_env_managed_engine_id(id):
+        raise EnvManagedReadOnlyError(
+            "This query engine is managed via environment variables and cannot be deleted."
+        )
+    query_engine = session.query(QueryEngine).get(id)
     if query_engine:
         query_engine.deleted_at = datetime.now()
         # session.delete(query_engine)
@@ -160,7 +217,11 @@ def delete_query_engine_by_id(id, commit=True, session=None):
 
 @with_session
 def recover_query_engine_by_id(id, commit=True, session=None):
-    query_engine = get_query_engine_by_id(id, session=session)
+    if is_env_managed_engine_id(id):
+        raise EnvManagedReadOnlyError(
+            "This query engine is managed via environment variables and cannot be modified."
+        )
+    query_engine = session.query(QueryEngine).get(id)
     if query_engine:
         query_engine.deleted_at = None
         if commit:
@@ -216,11 +277,17 @@ def create_query_metastore_update_schedule(
 
 @with_session
 def get_query_metastore_by_id(id, session=None):
+    env_ms = get_env_metastore_by_id(id)
+    if env_ms is not None:
+        return env_ms
     return session.query(QueryMetastore).get(id)
 
 
 @with_session
 def get_query_metastore_by_name(name, session=None):
+    env_ms = get_env_metastore_by_name(name)
+    if env_ms is not None:
+        return env_ms
     return session.query(QueryMetastore).filter(QueryMetastore.name == name).first()
 
 
@@ -232,12 +299,13 @@ def get_query_metastore_id_by_engine_id(engine_id: int, session=None):
 
 @with_session
 def get_all_query_metastore(session=None):
-    return session.query(QueryMetastore).all()
+    db_metastores = session.query(QueryMetastore).all()
+    return _merge_by_name(get_env_metastores(), db_metastores)
 
 
 @with_session
 def get_all_query_metastore_by_environment(environment_id, session=None):
-    return (
+    db_metastores = (
         session.query(QueryMetastore)
         .join(QueryEngine)
         .join(QueryEngineEnvironment)
@@ -246,10 +314,30 @@ def get_all_query_metastore_by_environment(environment_id, session=None):
         .all()
     )
 
+    # Collect env metastores referenced by env engines bound to this environment.
+    from logic.environment import get_environment_by_id
+
+    env_metastores = []
+    environment = get_environment_by_id(environment_id, session=session)
+    if environment is not None:
+        seen = set()
+        for engine in get_env_query_engines_by_environment_name(environment.name):
+            if engine.metastore_name and engine.metastore_name not in seen:
+                seen.add(engine.metastore_name)
+                ms = get_env_metastore_by_name(engine.metastore_name)
+                if ms is not None:
+                    env_metastores.append(ms)
+
+    return _merge_by_name(env_metastores, db_metastores)
+
 
 @with_session
 def recover_query_metastore_by_id(id, commit=True, session=None):
-    query_metastore = get_query_metastore_by_id(id, session=session)
+    if is_env_managed_metastore_id(id):
+        raise EnvManagedReadOnlyError(
+            "This metastore is managed via environment variables and cannot be modified."
+        )
+    query_metastore = session.query(QueryMetastore).get(id)
     if query_metastore:
         query_metastore.deleted_at = None
 
@@ -260,7 +348,11 @@ def recover_query_metastore_by_id(id, commit=True, session=None):
 
 @with_session
 def delete_query_metastore_by_id(id, commit=True, session=None):
-    query_metastore = get_query_metastore_by_id(id, session=session)
+    if is_env_managed_metastore_id(id):
+        raise EnvManagedReadOnlyError(
+            "This metastore is managed via environment variables and cannot be deleted."
+        )
+    query_metastore = session.query(QueryMetastore).get(id)
     if query_metastore:
         query_metastore.deleted_at = datetime.now()
 

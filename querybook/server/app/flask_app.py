@@ -32,6 +32,18 @@ def validate_db():
             )
 
 
+def sync_env_config():
+    """Sync env-managed query engines and metastores to DB shadow rows.
+    Fail-fast: if config is invalid (hash collision, name conflict with DB row),
+    do not start the process — let the deploy pipeline catch it.
+    """
+    if hasattr(sys, "_called_from_test"):
+        return
+    from lib.env_config.db_sync import sync_env_to_db
+
+    sync_env_to_db()
+
+
 def make_flask_app():
     app = Flask(__name__, static_folder=STATIC_PATH)
     app.json_encoder = JSONEncoder

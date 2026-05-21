@@ -9,6 +9,8 @@ SQL_SESSION_FAILURES = "sql_session.failures"
 TASK_FAILURES = "task.failures"
 REDIS_OPERATIONS = "redis.operations"
 QUERY_EXECUTIONS = "query.executions"
+DATADOC_SCHEDULED_RUNS = "datadoc_scheduled_runs"
+DATADOC_SCHEDULED_RETRIES = "datadoc_scheduled_retries"
 
 
 logger_name = QuerybookSettings.STATS_LOGGER_NAME

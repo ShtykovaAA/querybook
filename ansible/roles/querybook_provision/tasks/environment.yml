@@ -1,0 +1,112 @@
+---
+# Creates or updates an environment and attaches members.
+#
+# Query engine ↔ environment binding is no longer done here — env-managed
+# engines bind themselves via the `environments` field in their JSON config
+# (see lib/env_config/db_sync.py:_sync_engine_environment_bindings). Make
+# sure the environment listed in querybook_env_query_engines[].environments
+# matches the name you set here.
+
+- name: "List environments (looking for {{ env_spec.name }})"
+  ansible.builtin.uri:
+    url: "{{ querybook_ds_url }}/admin/environment/"
+    method: GET
+    headers:
+      Cookie: "{{ querybook_admin_cookie }}"
+    status_code: [200]
+    return_content: true
+  register: qb_envs_list
+
+- name: "Set existing environment fact for {{ env_spec.name }}"
+  ansible.builtin.set_fact:
+    qb_env_existing: >-
+      {{ (qb_envs_list.json.data
+          | selectattr('name', 'equalto', env_spec.name)
+          | list
+          | first) | default({}) }}
+
+- name: "Create environment {{ env_spec.name }}"
+  ansible.builtin.uri:
+    url: "{{ querybook_ds_url }}/admin/environment/"
+    method: POST
+    body_format: json
+    headers:
+      Cookie: "{{ querybook_admin_cookie }}"
+    body:
+      name: "{{ env_spec.name }}"
+      description: "{{ env_spec.description | default('') }}"
+      image: "{{ env_spec.image | default('') }}"
+      public: "{{ env_spec.public | default(false) }}"
+      hidden: "{{ env_spec.hidden | default(false) }}"
+      shareable: "{{ env_spec.shareable | default(true) }}"
+    status_code: [200]
+    return_content: true
+  register: qb_env_created
+  when: qb_env_existing == {}
+
+- name: "Update environment {{ env_spec.name }}"
+  ansible.builtin.uri:
+    url: "{{ querybook_ds_url }}/admin/environment/{{ qb_env_existing.id }}/"
+    method: PUT
+    body_format: json
+    headers:
+      Cookie: "{{ querybook_admin_cookie }}"
+    body:
+      name: "{{ env_spec.name }}"
+      description: "{{ env_spec.description | default('') }}"
+      image: "{{ env_spec.image | default('') }}"
+      public: "{{ env_spec.public | default(false) }}"
+      hidden: "{{ env_spec.hidden | default(false) }}"
+      shareable: "{{ env_spec.shareable | default(true) }}"
+    status_code: [200]
+    return_content: true
+  when: qb_env_existing != {}
+
+- name: "Resolve environment id for {{ env_spec.name }}"
+  ansible.builtin.set_fact:
+    qb_env_id: "{{ qb_env_existing.id | default(qb_env_created.json.data.id) }}"
+
+# -- attach members --------------------------------------------------------
+# Skipped when the environment is public, since public envs grant access to
+# all logged-in users and user_environment rows are not needed.
+
+- name: "List current members of {{ env_spec.name }}"
+  ansible.builtin.uri:
+    # GET endpoints in Querybook read kwargs from the "params" query arg,
+    # JSON-encoded, not from the request body.
+    url: "{{ querybook_ds_url }}/admin/environment/{{ qb_env_id }}/users/?params={{ {'limit': 1000, 'offset': 0} | to_json | urlencode }}"
+    method: GET
+    headers:
+      Cookie: "{{ querybook_admin_cookie }}"
+    status_code: [200]
+    return_content: true
+  register: qb_env_members
+  when: not (env_spec.public | default(false))
+
+- name: "Resolve member user ids for {{ env_spec.name }}"
+  ansible.builtin.uri:
+    url: "{{ querybook_ds_url }}/user/name/{{ item }}/"
+    method: GET
+    headers:
+      Cookie: "{{ querybook_admin_cookie }}"
+    status_code: [200]
+    return_content: true
+  loop: "{{ env_spec.members | default([]) }}"
+  register: qb_member_lookups
+  when: not (env_spec.public | default(false))
+
+- name: "Add members to {{ env_spec.name }}"
+  ansible.builtin.uri:
+    url: "{{ querybook_ds_url }}/admin/environment/{{ qb_env_id }}/user/{{ item.json.data.id }}/"
+    method: POST
+    headers:
+      Cookie: "{{ querybook_admin_cookie }}"
+    status_code: [200]
+    return_content: true
+  loop: "{{ qb_member_lookups.results | default([]) }}"
+  loop_control:
+    label: "{{ item.json.data.username | default('?') }}"
+  when:
+    - not (env_spec.public | default(false))
+    - item.json is defined
+    - item.json.data.id not in (qb_env_members.json.data | map(attribute='id') | list)
