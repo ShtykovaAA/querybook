@@ -1,4 +1,4 @@
-from typing import Dict, TextIO
+from typing import Dict, Optional, TextIO
 import boto3
 import botocore
 from botocore.client import Config
@@ -10,11 +10,68 @@ from lib.utils.utf8 import split_by_last_invalid_utf8_char
 from .common import ChunkReader, FileDoesNotExist
 
 
+_TRUTHY = {"true", "1", "yes", "on"}
+_FALSY = {"false", "0", "no", "off"}
+
+
+def _resolve_use_ssl() -> Optional[bool]:
+    """Return explicit use_ssl override, or derive from endpoint scheme.
+
+    Why: callers may set an http:// endpoint for a local MinIO without TLS,
+    in which case boto3 must NOT attempt a TLS handshake.
+    """
+    raw = QuerybookSettings.AWS_S3_USE_SSL
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        v = raw.strip().lower()
+        if v in _TRUTHY:
+            return True
+        if v in _FALSY:
+            return False
+
+    endpoint = QuerybookSettings.AWS_S3_ENDPOINT_URL
+    if endpoint:
+        if endpoint.startswith("http://"):
+            return False
+        if endpoint.startswith("https://"):
+            return True
+    return None
+
+
+def _boto3_s3_kwargs(signature_version: Optional[str] = None) -> Dict:
+    kwargs: Dict = {}
+    if QuerybookSettings.AWS_REGION:
+        kwargs["region_name"] = QuerybookSettings.AWS_REGION
+    if QuerybookSettings.AWS_S3_ENDPOINT_URL:
+        kwargs["endpoint_url"] = QuerybookSettings.AWS_S3_ENDPOINT_URL
+    if (
+        QuerybookSettings.AWS_ACCESS_KEY_ID
+        and QuerybookSettings.AWS_SECRET_ACCESS_KEY
+    ):
+        kwargs["aws_access_key_id"] = QuerybookSettings.AWS_ACCESS_KEY_ID
+        kwargs["aws_secret_access_key"] = QuerybookSettings.AWS_SECRET_ACCESS_KEY
+    use_ssl = _resolve_use_ssl()
+    if use_ssl is not None:
+        kwargs["use_ssl"] = use_ssl
+    if signature_version:
+        kwargs["config"] = Config(signature_version=signature_version)
+    return kwargs
+
+
+def s3_client(signature_version: Optional[str] = None):
+    return boto3.client("s3", **_boto3_s3_kwargs(signature_version))
+
+
+def s3_resource():
+    return boto3.resource("s3", **_boto3_s3_kwargs())
+
+
 class MultiPartUploader(object):
     def __init__(self, bucket_name, key):
         self._bucket_name = bucket_name
         self._key = key
-        self._s3 = boto3.client("s3")
+        self._s3 = s3_client()
         self._mpu = self._s3.create_multipart_upload(Bucket=bucket_name, Key=key)
         self._parts = []
         self._part_number = 1
@@ -78,15 +135,12 @@ class S3KeySigner(object):
     def __init__(self, bucket_name):
         self._bucket_name = bucket_name
 
-        if QuerybookSettings.S3_BUCKET_S3V4_ENABLED:
-            self._s3 = boto3.client(
-                "s3",
-                QuerybookSettings.AWS_REGION,
-                config=Config(signature_version="s3v4"),
-            )
-        else:
-            self._s3 = boto3.client("s3")
-        self._bucket = boto3.resource("s3").Bucket(bucket_name)
+        self._s3 = s3_client(
+            signature_version="s3v4"
+            if QuerybookSettings.S3_BUCKET_S3V4_ENABLED
+            else None
+        )
+        self._bucket = s3_resource().Bucket(bucket_name)
 
     def generate_presigned_url(
         self, key, method="get_object", expires_in=86400, params={}
@@ -119,7 +173,7 @@ class S3FileReader(ChunkReader):
 
         # Now connect to s3 using boto3
         try:
-            self._s3 = boto3.resource("s3")
+            self._s3 = s3_resource()
             self._object = self._s3.Object(self._bucket_name, key)
             self._body = self._object.get()["Body"]
         except botocore.exceptions.ClientError as e:
@@ -181,9 +235,9 @@ class S3FileCopier(object):
         )
         source_type = self._source_config["type"]
         if source_type == "s3":
-            boto3.resource("s3").meta.client.copy(
+            s3_resource().meta.client.copy(
                 self._source_config["data"], target_bucket, target_obj_path
             )
         elif source_type == "file":
             f: TextIO = self._source_config["data"]["file"]
-            boto3.client("s3").upload_file(f.name, target_bucket, target_obj_path)
+            s3_client().upload_file(f.name, target_bucket, target_obj_path)

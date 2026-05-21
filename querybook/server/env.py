@@ -141,6 +141,13 @@ class QuerybookSettings(object):
     STORE_READ_SIZE = int(get_env_config("STORE_READ_SIZE"))
     S3_BUCKET_S3V4_ENABLED = get_env_config("S3_BUCKET_S3V4_ENABLED") == "true"
     AWS_REGION = get_env_config("AWS_REGION")
+    # Custom S3-compatible endpoint (e.g. MinIO). When set, boto3 talks to it
+    # instead of AWS. Scheme of the URL drives TLS unless AWS_S3_USE_SSL is
+    # set explicitly.
+    AWS_S3_ENDPOINT_URL = get_env_config("AWS_S3_ENDPOINT_URL")
+    AWS_ACCESS_KEY_ID = get_env_config("AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY = get_env_config("AWS_SECRET_ACCESS_KEY")
+    AWS_S3_USE_SSL = get_env_config("AWS_S3_USE_SSL")
 
     DB_MAX_UPLOAD_SIZE = int(get_env_config("DB_MAX_UPLOAD_SIZE"))
 

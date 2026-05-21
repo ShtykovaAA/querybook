@@ -70,6 +70,13 @@ STORE_MAX_READ_SIZE: 5242880
 STORE_READ_SIZE: 131072
 S3_BUCKET_S3V4_ENABLED: false
 AWS_REGION: us-east-1
+# Custom S3-compatible endpoint (e.g. MinIO). Leave null to use AWS S3.
+AWS_S3_ENDPOINT_URL: ~
+AWS_ACCESS_KEY_ID: ~
+AWS_SECRET_ACCESS_KEY: ~
+# Force TLS on/off for S3. If null, derived from AWS_S3_ENDPOINT_URL scheme
+# (http → false, https → true).
+AWS_S3_USE_SSL: ~
 
 # Folowing settings are relevant to db store
 DB_MAX_UPLOAD_SIZE: 5242880
