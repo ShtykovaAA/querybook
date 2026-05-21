@@ -265,12 +265,28 @@ def on_datadoc_run_success(
     last_query_status, last_query_execution_id = last_query_result
 
     is_success = last_query_status == QueryExecutionStatus.DONE.value
-    error_msg = (
-        None if is_success else get_datadoc_error_message(last_query_execution_id)
+
+    deadline_epoch = completion_params.get("deadline_epoch")
+    is_timeout = (
+        not is_success
+        and deadline_epoch is not None
+        and datetime.datetime.utcnow().timestamp() > deadline_epoch
     )
 
+    if is_timeout:
+        error_msg = (
+            "DataDoc run timed out. Cell exceeded the configured timeout."
+        )
+    elif not is_success:
+        error_msg = get_datadoc_error_message(last_query_execution_id)
+    else:
+        error_msg = None
+
     return on_datadoc_completion(
-        is_success=is_success, error_msg=error_msg, **completion_params
+        is_success=is_success,
+        is_timeout=is_timeout,
+        error_msg=error_msg,
+        **completion_params,
     )
 
 
