@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { matchPath } from 'react-router-dom';
 
 import { ComponentType, ElementType } from 'const/analytics';
 import { trackClick } from 'lib/analytics';
@@ -15,27 +14,22 @@ import { QuerybookVersion } from './QuerybookVersion';
 
 export const InfoMenuButton: React.FunctionComponent = () => {
     const [showPanel, setShowPanel] = React.useState(false);
+    const [hasUnreadChangeLog, setHasUnreadChangeLog] = React.useState(false);
 
     const buttonRef = React.useRef<HTMLAnchorElement>();
 
+    // Surface new changelog entries as a ping on the Help button rather than
+    // auto-navigating to /changelog/. The old behavior rendered 6 markdown
+    // files with ~10MB of static images on first load, blank-screening new
+    // users until everything decoded; the badge lets the user choose to open
+    // it.
     React.useEffect(() => {
         localStore
             .get<ChangeLogValue>(CHANGE_LOG_KEY)
             .then((lastViewedDate) => {
                 ChangeLogResource.getAll(lastViewedDate).then(({ data }) => {
-                    if (data) {
-                        // Automatically open the changelog modal if there's a new change
-                        // and the current page is not the changelog page
-                        const match = matchPath(location.pathname, {
-                            path: '/:env/changelog/:date?',
-                            exact: true,
-                            strict: false,
-                        });
-                        if (!match) {
-                            navigateWithinEnv('/changelog/', {
-                                isModal: true,
-                            });
-                        }
+                    if (data && data.length > 0) {
+                        setHasUnreadChangeLog(true);
                     }
                 });
             });
@@ -50,6 +44,7 @@ export const InfoMenuButton: React.FunctionComponent = () => {
                 <MenuDivider />
                 <MenuItem
                     onClick={() => {
+                        setHasUnreadChangeLog(false);
                         navigateWithinEnv('/changelog/', {
                             isModal: true,
                         });
@@ -122,6 +117,7 @@ export const InfoMenuButton: React.FunctionComponent = () => {
                 tooltip={'Logs, Tips, Shortcuts, & FAQs'}
                 tooltipPos="right"
                 title="Help"
+                ping={hasUnreadChangeLog}
             />
             {showPanel ? getPanelDOM() : null}
         </div>
