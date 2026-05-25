@@ -1,10 +1,44 @@
 .DataDocScheduleItem {
-    background-color: var(--bg-lightest);
-    border-radius: var(--border-radius-sm);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 36px;
+    padding: 4px 12px;
+    border-bottom: 1px solid var(--bg-lightest);
 
-    padding: var(--padding) var(--padding-lg);
-
-    .DataDocScheduleItem-bottom {
-        align-items: flex-end;
+    &:hover {
+        background-color: var(--bg-lightest);
     }
+
+    // Last-run icon coloring — mirrors components/Task/TaskStatusIcon.tsx
+    // so the compact icon-only variant matches the full one.
+    .status-success {
+        color: var(--color-true);
+    }
+    .status-in-progress {
+        color: var(--color-blue-dark);
+    }
+    .status-failure {
+        color: var(--color-false);
+    }
+    .status-timeout {
+        color: var(--color-orange-dark, #b86e00);
+    }
+}
+
+.DataDocScheduleListHeader {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-bottom: 2px solid var(--bg-lightest);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background-color: var(--bg);
+    font-weight: bold;
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--text-light);
+    letter-spacing: 0.5px;
 }

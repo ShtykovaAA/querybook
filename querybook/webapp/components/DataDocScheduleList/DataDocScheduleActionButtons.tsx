@@ -4,7 +4,7 @@ import { useDispatch } from 'react-redux';
 import { DataDocSchedule } from 'components/DataDocSchedule/DataDocSchedule';
 import { getScheduledDocs } from 'redux/scheduledDataDoc/action';
 import { Dispatch } from 'redux/store/types';
-import { Button } from 'ui/Button/Button';
+import { IconButton } from 'ui/Button/IconButton';
 import { Modal } from 'ui/Modal/Modal';
 
 export const DataDocScheduleActionEdit: React.FunctionComponent<{
@@ -41,10 +41,11 @@ export const DataDocScheduleActionEdit: React.FunctionComponent<{
                     </div>
                 </Modal>
             )}
-            <Button
+            <IconButton
                 onClick={() => setShowModal(true)}
                 icon={buttonIcon}
-                title={actionText}
+                tooltip={actionText}
+                tooltipPos="left"
             />
         </>
     );
@@ -54,7 +55,7 @@ export const DataDocScheduleActionHistory: React.FunctionComponent<{
     docId: number;
     docTitle: string;
     actionText?: string;
-}> = ({ docId, docTitle, actionText = 'History' }) => {
+}> = ({ docId, docTitle, actionText = 'View Run Record' }) => {
     const [showModal, setShowModal] = useState(false);
 
     return (
@@ -74,10 +75,11 @@ export const DataDocScheduleActionHistory: React.FunctionComponent<{
                     </div>
                 </Modal>
             )}
-            <Button
+            <IconButton
                 onClick={() => setShowModal(true)}
                 icon="List"
-                title={actionText}
+                tooltip={actionText}
+                tooltipPos="left"
             />
         </>
     );

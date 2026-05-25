@@ -19,9 +19,22 @@ import { IconButton } from 'ui/Button/IconButton';
 
 import { DataDocScheduleItem } from './DataDocScheduleItem';
 import { DataDocSchedsFilters } from './DataDocSchedsFilters';
+import { COLUMN_STYLES } from './scheduleColumns';
 import { UpdateFiltersType } from 'const/schedFiltersType';
 
 import './DataDocScheduleList.scss';
+
+const DataDocScheduleListHeader: React.FC = () => (
+    <div className="DataDocScheduleListHeader">
+        <div style={COLUMN_STYLES.docTitle}>DataDoc</div>
+        <div style={COLUMN_STYLES.status}>Status</div>
+        <div style={COLUMN_STYLES.cron}>Schedule</div>
+        <div style={COLUMN_STYLES.nextRun}>Next Run</div>
+        <div style={COLUMN_STYLES.limits}>Timeout / Retry</div>
+        <div style={COLUMN_STYLES.lastRun}>Last</div>
+        <div style={COLUMN_STYLES.actions} />
+    </div>
+);
 
 function useDataDocScheduleFiltersAndPagination() {
     const {
@@ -190,9 +203,15 @@ const DataDocScheduleList: React.FC = () => {
                                 : 'No DataDocs'}
                         </EmptyText>
                     ) : (
-                        <AccentText color="light" className="ml4 mb8">
-                            <PrettyNumber val={numberOfResults} unit="result" />
-                        </AccentText>
+                        <>
+                            <AccentText color="light" className="ml4 mb8">
+                                <PrettyNumber
+                                    val={numberOfResults}
+                                    unit="result"
+                                />
+                            </AccentText>
+                            <DataDocScheduleListHeader />
+                        </>
                     )}
                     {dataDocsWithSchedule.map((docWithSchedule) => (
                         <DataDocScheduleItem
