@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Dict, Optional
 
-from flask import abort, Response, redirect, request
+from flask import abort, Response, redirect, request, stream_with_context
 from flask_login import current_user
 
 from app.flask_app import socketio
@@ -13,6 +13,7 @@ from app.auth.permission import (
     verify_query_engine_permission,
 )
 from clients.common import FileDoesNotExist
+from env import QuerybookSettings
 from lib.export.all_exporters import ALL_EXPORTERS, get_exporter
 from lib.result_store import GenericReader
 from lib.query_analysis.templating import (
@@ -375,22 +376,43 @@ def download_statement_execution_result(statement_execution_id):
 
         download_file_name = f"result_{statement_execution.query_execution_id}_{statement_execution_id}.csv"
 
-        reader = GenericReader(statement_execution.result_path)
-        response = None
-        if reader.has_download_url:
-            # If the Reader can generate a download,
-            # we let user download the file by redirection
+        # Download endpoint serves the full file — disable the preview-oriented
+        # STORE_MAX_READ_SIZE cap so large exports aren't silently truncated.
+        reader = GenericReader(statement_execution.result_path, max_read_size=None)
+
+        proxy_download = (
+            reader.has_download_url
+            and QuerybookSettings.S3_RESULT_DOWNLOAD_VIA_PROXY
+            and reader.supports_raw_chunks
+        )
+
+        if reader.has_download_url and not proxy_download:
+            # Browser fetches the object directly via a short-lived presigned URL.
             download_url = reader.get_download_url(custom_name=download_file_name)
-            response = redirect(download_url)
-        else:
-            # We read the raw file and download it for the user
+            return redirect(download_url)
+
+        if proxy_download:
+            # Stream object bytes from S3 through the web pod so browsers that
+            # cannot reach S3 directly (e.g. cluster-internal endpoint) still work.
             reader.start()
-            raw = reader.read_raw()
-            response = Response(raw)
-            response.headers["Content-Type"] = "text/csv"
-            response.headers["Content-Disposition"] = (
-                f'attachment; filename="{download_file_name}"'
+
+            def stream():
+                try:
+                    yield from reader.raw_chunks()
+                finally:
+                    reader.end()
+
+            response = Response(
+                stream_with_context(stream()), mimetype="text/csv"
             )
+        else:
+            # In-memory backends (db, file): the raw file is small by design.
+            reader.start()
+            response = Response(reader.read_raw(), mimetype="text/csv")
+
+        response.headers["Content-Disposition"] = (
+            f'attachment; filename="{download_file_name}"'
+        )
         return response
 
 

@@ -148,6 +148,12 @@ class QuerybookSettings(object):
     AWS_ACCESS_KEY_ID = get_env_config("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY = get_env_config("AWS_SECRET_ACCESS_KEY")
     AWS_S3_USE_SSL = get_env_config("AWS_S3_USE_SSL")
+    # When true, CSV downloads are streamed through the web pod instead of
+    # 302-redirecting the browser to a presigned S3 URL. Required when S3 is
+    # not reachable from the user's browser (e.g. cluster-internal endpoint).
+    S3_RESULT_DOWNLOAD_VIA_PROXY = (
+        str(get_env_config("S3_RESULT_DOWNLOAD_VIA_PROXY")).lower() == "true"
+    )
 
     DB_MAX_UPLOAD_SIZE = int(get_env_config("DB_MAX_UPLOAD_SIZE"))
 

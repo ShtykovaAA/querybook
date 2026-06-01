@@ -189,6 +189,21 @@ class S3FileReader(ChunkReader):
         valid_raw, self._left_over_bytes = split_by_last_invalid_utf8_char(raw)
         return valid_raw.decode("utf-8")
 
+    def raw_chunks(self):
+        # Stream the object body as bytes without decoding, capped at
+        # max_read_size so a runaway export can't blow past the configured limit.
+        bytes_read = 0
+        cap = self._max_read_size
+        while True:
+            chunk = self._body.read(self._read_size)
+            if not chunk:
+                return
+            if cap is not None and bytes_read + len(chunk) > cap:
+                yield chunk[: cap - bytes_read]
+                return
+            bytes_read += len(chunk)
+            yield chunk
+
 
 class S3FileCopier(object):
     """Used to copy files managed by Querybook (using QuerybookSettings)

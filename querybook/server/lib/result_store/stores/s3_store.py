@@ -1,4 +1,4 @@
-from typing import Generator, List, Optional
+from typing import Generator, Iterator, List, Optional
 
 from lib.result_store.stores.base_store import BaseReader, BaseUploader
 from env import QuerybookSettings
@@ -57,8 +57,16 @@ class S3Reader(BaseReader):
         return self._reader.read_lines(number_of_lines)
 
     def read_raw(self) -> str:
-        # TODO: implement read raw for s3 reader
-        raise NotImplementedError()
+        chunks = []
+        while True:
+            chunk = self._reader.read()
+            if not chunk:
+                break
+            chunks.append(chunk)
+        return "".join(chunks)
+
+    def raw_chunks(self) -> Iterator[bytes]:
+        return self._reader.raw_chunks()
 
     def end(self):
         self._reader = None
