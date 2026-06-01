@@ -1,4 +1,4 @@
-from typing import Generator, List, Optional
+from typing import Generator, Iterator, List, Optional
 
 from .all_result_stores import ALL_RESULT_STORES
 from .stores.base_store import BaseReader, BaseUploader
@@ -55,6 +55,13 @@ class GenericReader(BaseReader):
 
     def read_raw(self) -> str:
         return self._reader.read_raw()
+
+    def raw_chunks(self) -> Iterator[bytes]:
+        return self._reader.raw_chunks()
+
+    @property
+    def supports_raw_chunks(self) -> bool:
+        return hasattr(self._reader, "raw_chunks")
 
     @property
     def has_download_url(self):
