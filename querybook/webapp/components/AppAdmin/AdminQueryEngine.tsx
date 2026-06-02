@@ -17,6 +17,7 @@ import { AdminQueryEngineResource } from 'resource/admin/queryEngine';
 import { AsyncButton } from 'ui/AsyncButton/AsyncButton';
 import { Card } from 'ui/Card/Card';
 import { Content } from 'ui/Content/Content';
+import { DisabledSection } from 'ui/DisabledSection/DisabledSection';
 import { SimpleField } from 'ui/FormikField/SimpleField';
 import { GenericCRUD } from 'ui/GenericCRUD/GenericCRUD';
 import { Level } from 'ui/Level/Level';
@@ -394,6 +395,38 @@ export const AdminQueryEngine: React.FunctionComponent<IProps> = ({
                                     item={executorTemplate[item.executor]}
                                     itemLoader={NOOP}
                                 />
+                            </div>
+                        </div>
+
+                        <div className="AdminForm-section">
+                            <div className="AdminForm-section-top flex-row">
+                                <div className="AdminForm-section-title">
+                                    Main Connection (PostgreSQL only)
+                                </div>
+                            </div>
+                            <div className="AdminForm-section-content">
+                                <DisabledSection
+                                    disabled={
+                                        item.executor !== 'sqlalchemy' ||
+                                        Boolean(item.is_env_managed)
+                                    }
+                                >
+                                    <SimpleField
+                                        stacked
+                                        name="main_connection_string"
+                                        label="Main connection string"
+                                        type="input"
+                                        inputType="password"
+                                        help={
+                                            item.is_env_managed
+                                                ? 'Managed via connections.yml — edit the file to change.'
+                                                : item.executor !==
+                                                  'sqlalchemy'
+                                                ? 'Available only for PostgreSQL engines (executor=sqlalchemy).'
+                                                : 'Optional production DSN. Schedules can opt cells into this connection via the "Run on main" toggle. Format: postgresql://user:pass@host:port/db'
+                                        }
+                                    />
+                                </DisabledSection>
                             </div>
                         </div>
 

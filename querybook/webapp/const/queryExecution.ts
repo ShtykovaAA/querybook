@@ -71,6 +71,10 @@ export interface IQueryExecution {
     // it may have a field called total which
     // indicates the total number of statements
     total?: number;
+
+    // True when the execution was routed to the engine's main_connection_string
+    // via a scheduled run's run_on_main_engine_ids opt-in.
+    use_main_connection?: boolean;
 }
 
 export interface IQueryExecutionExportResult {

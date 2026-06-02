@@ -50,6 +50,14 @@ export interface IAdminQueryEngine {
     };
 
     environments?: IAdminEnvironment[];
+    /**
+     * Optional secondary DSN (PostgreSQL only). When set, schedules can opt
+     * specific cells into running on this connection instead of the sandbox
+     * one via `kwargs.run_on_main_engine_ids`. For env-managed engines the
+     * value is masked to "***".
+     */
+    main_connection_string?: string | null;
+    is_env_managed?: boolean;
 }
 
 export interface IAdminACLControl {

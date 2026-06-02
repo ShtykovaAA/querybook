@@ -56,10 +56,55 @@ def _mask_env_managed_engine(engine_dict):
     """Strip secrets from the admin-API view of an env-managed engine.
     The shadow row in the DB stores executor_params={} already, but env
     objects expose real params (the loader needs them at runtime). Mask
-    them only when serializing for the API."""
+    them only when serializing for the API.
+
+    main_connection_string lives in YAML and is intentionally NOT mirrored
+    to the shadow row, so the DB value is always NULL for env-managed
+    engines. We probe the env-registry to surface a masked indicator."""
     if engine_dict.get("is_env_managed"):
-        engine_dict = {**engine_dict, "executor_params": {}}
+        from lib.env_config import get_env_query_engine_by_id
+
+        env_engine = get_env_query_engine_by_id(engine_dict.get("id"))
+        env_main = (
+            getattr(env_engine, "main_connection_string", None)
+            if env_engine is not None
+            else None
+        )
+        engine_dict = {
+            **engine_dict,
+            "executor_params": {},
+            "main_connection_string": "***" if env_main else None,
+        }
     return engine_dict
+
+
+_PG_DSN_PREFIXES = ("postgresql://", "postgresql+psycopg2://")
+
+
+def _validate_main_connection_string(main_connection_string, executor):
+    """Reject misconfigured main_connection_string. Returns the normalized
+    value (None for empty)."""
+    if main_connection_string is None or main_connection_string == "":
+        return None
+    api_assert(
+        isinstance(main_connection_string, str),
+        message="main_connection_string must be a string",
+    )
+    api_assert(
+        executor == "sqlalchemy",
+        message=(
+            "main_connection_string is only supported for PostgreSQL engines "
+            "(executor='sqlalchemy')"
+        ),
+    )
+    api_assert(
+        main_connection_string.startswith(_PG_DSN_PREFIXES),
+        message=(
+            "main_connection_string must be a PostgreSQL DSN starting with "
+            "postgresql:// or postgresql+psycopg2://"
+        ),
+    )
+    return main_connection_string
 
 
 def _mask_env_managed_metastore(metastore_dict):
@@ -193,6 +238,7 @@ def create_query_engine(
     feature_params,
     description=None,
     metastore_id=None,
+    main_connection_string=None,
 ):
     from lib.env_config import get_env_query_engine_by_name
 
@@ -200,6 +246,9 @@ def create_query_engine(
         get_env_query_engine_by_name(name) is None,
         message=f"A query engine named '{name}' is already managed via environment variables.",
         status_code=409,
+    )
+    main_connection_string = _validate_main_connection_string(
+        main_connection_string, executor
     )
     with DBSession() as session:
         query_engine = QueryEngine.create(
@@ -211,6 +260,7 @@ def create_query_engine(
                 "executor_params": executor_params,
                 "feature_params": feature_params,
                 "metastore_id": metastore_id,
+                "main_connection_string": main_connection_string,
             },
             session=session,
         )
@@ -254,6 +304,18 @@ def test_query_engine_connection(
 @with_admin_audit_log(AdminItemType.QueryEngine, AdminOperation.UPDATE)
 def update_query_engine(id, **fields_to_update):
     _assert_engine_writable(id)
+    if "main_connection_string" in fields_to_update:
+        # Need the effective executor to validate. Prefer the incoming
+        # value (admin may have just switched executor), fall back to the
+        # stored one.
+        executor = fields_to_update.get("executor")
+        if executor is None:
+            stored = QueryEngine.get(id=id)
+            executor = stored.executor if stored else None
+        fields_to_update["main_connection_string"] = _validate_main_connection_string(
+            fields_to_update.get("main_connection_string"), executor
+        )
+
     with DBSession() as session:
         query_engine = QueryEngine.update(
             id,
@@ -268,6 +330,7 @@ def update_query_engine(id, **fields_to_update):
                 "metastore_id",
                 "deleted_at",
                 "status_checker",
+                "main_connection_string",
             ],
             session=session,
         )

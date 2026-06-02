@@ -68,6 +68,7 @@ def run_datadoc_with_config(
     max_retries = kwargs.get("max_retries", 0) or 0
     attempt = kwargs.get("_attempt", 1)
     parent_run_record_id = kwargs.get("_parent_run_record_id")
+    run_on_main_engine_ids = set(kwargs.get("run_on_main_engine_ids") or [])
 
     deadline_epoch = None
     if timeout_seconds:
@@ -114,6 +115,10 @@ def run_datadoc_with_config(
         }
         if timeout_seconds:
             original_run_kwargs["timeout_seconds"] = timeout_seconds
+        if run_on_main_engine_ids:
+            original_run_kwargs["run_on_main_engine_ids"] = sorted(
+                run_on_main_engine_ids
+            )
 
         completion_params = {
             "doc_id": doc_id,
@@ -158,6 +163,7 @@ def run_datadoc_with_config(
                     "query": query,
                     "engine_id": engine_id,
                     "uid": runner_id,
+                    "use_main_connection": engine_id in run_on_main_engine_ids,
                 },
                 "data_doc_id": doc_id,
                 "task_run_record_id": record_id,

@@ -15,6 +15,7 @@ valid_schedule_config_keys = [
     "notifications",
     "timeout_seconds",
     "max_retries",
+    "run_on_main_engine_ids",
 ]
 valid_export_config_keys = ["exporter_cell_id", "exporter_name", "exporter_params"]
 valid_notification_keys = ["with", "on", "config"]
@@ -31,9 +32,28 @@ def validate_datadoc_schedule_config(schedule_config):
         validate_notifications_config(schedule_config.get("notifications", []))
         validate_exporters_config(schedule_config.get("exports", []))
         validate_timeout_and_retries(schedule_config)
+        validate_run_on_main_engine_ids(schedule_config)
     except InvalidScheduleException as e:
         return False, str(e)
     return True, ""
+
+
+def validate_run_on_main_engine_ids(schedule_config):
+    """Shape-only check. Cross-validation against the DataDoc's actual cell
+    engines and each engine's main_connection_string happens at the
+    endpoint layer (see datasources/datadoc.py)."""
+    if "run_on_main_engine_ids" not in schedule_config:
+        return
+    value = schedule_config["run_on_main_engine_ids"]
+    if value is None:
+        return
+    if not isinstance(value, list):
+        raise InvalidScheduleException("run_on_main_engine_ids must be a list")
+    for item in value:
+        if not isinstance(item, int) or isinstance(item, bool):
+            raise InvalidScheduleException(
+                "run_on_main_engine_ids must contain integer engine ids"
+            )
 
 
 def validate_timeout_and_retries(schedule_config):

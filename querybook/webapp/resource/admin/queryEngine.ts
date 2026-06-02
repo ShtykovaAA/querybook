@@ -26,6 +26,8 @@ export const AdminQueryEngineResource = {
             executor_params: queryEngine.executor_params,
             metastore_id: queryEngine.metastore_id ?? null,
             feature_params: queryEngine.feature_params,
+            main_connection_string:
+                queryEngine.main_connection_string ?? null,
         }),
 
     update: (queryEngineId: number, queryEngine: Partial<IAdminQueryEngine>) =>

@@ -19,6 +19,11 @@ from lib.logger import get_logger
 from lib.notify.utils import get_user_preferred_notifier, notify_user
 from lib.scheduled_datadoc.validator import validate_datadoc_schedule_config
 from lib.scheduled_datadoc.legacy import convert_if_legacy_datadoc_schedule
+from lib.scheduled_datadoc.main_connection import (
+    InvalidMainEngineIdsError,
+    assert_engines_can_run_on_main,
+    normalize_run_on_main_engine_ids,
+)
 
 from logic import (
     datadoc_collab,
@@ -293,15 +298,31 @@ def create_datadoc_schedule(
         verify_environment_permission([data_doc.environment_id])
         api_assert(data_doc.public, "SCHEDULE_REQUIRES_PUBLIC_DATADOC")
 
+        run_on_main_engine_ids = normalize_run_on_main_engine_ids(
+            kwargs.get("run_on_main_engine_ids")
+        )
+        try:
+            assert_engines_can_run_on_main(
+                run_on_main_engine_ids, data_doc, session=session
+            )
+        except InvalidMainEngineIdsError as e:
+            api_assert(False, str(e))
+
+        final_kwargs = {
+            **kwargs,
+            "user_id": data_doc.owner_uid,
+            "doc_id": id,
+        }
+        if run_on_main_engine_ids:
+            final_kwargs["run_on_main_engine_ids"] = run_on_main_engine_ids
+        else:
+            final_kwargs.pop("run_on_main_engine_ids", None)
+
         return schedule_logic.create_task_schedule(
             schedule_name,
             "tasks.run_datadoc.run_datadoc",
             cron=cron,
-            kwargs={
-                **kwargs,
-                "user_id": data_doc.owner_uid,
-                "doc_id": id,
-            },
+            kwargs=final_kwargs,
             session=session,
         )
 
@@ -335,11 +356,26 @@ def update_datadoc_schedule(id, cron=None, enabled=None, kwargs=None):
         if enabled is not None:
             updated_fields["enabled"] = enabled
         if kwargs is not None:
-            updated_fields["kwargs"] = {
+            run_on_main_engine_ids = normalize_run_on_main_engine_ids(
+                kwargs.get("run_on_main_engine_ids")
+            )
+            try:
+                assert_engines_can_run_on_main(
+                    run_on_main_engine_ids, data_doc, session=session
+                )
+            except InvalidMainEngineIdsError as e:
+                api_assert(False, str(e))
+
+            new_kwargs = {
                 **kwargs,
                 "user_id": data_doc.owner_uid,
                 "doc_id": id,
             }
+            if run_on_main_engine_ids:
+                new_kwargs["run_on_main_engine_ids"] = run_on_main_engine_ids
+            else:
+                new_kwargs.pop("run_on_main_engine_ids", None)
+            updated_fields["kwargs"] = new_kwargs
 
         return schedule_logic.update_task_schedule(
             schedule.id,

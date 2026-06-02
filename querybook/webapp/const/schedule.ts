@@ -94,6 +94,12 @@ export interface IDataDocScheduleKwargs {
         exporter_name?: string;
         exporter_params?: Record<string, any>;
     }>;
+    /**
+     * Engine ids whose cells should run on the engine's main_connection_string
+     * instead of the sandbox DSN. Only engines with has_main_connection=true
+     * are eligible.
+     */
+    run_on_main_engine_ids?: number[];
 }
 
 export interface IDataDocTaskSchedule extends ITaskSchedule {

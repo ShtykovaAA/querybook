@@ -76,6 +76,9 @@ def _parse_json(raw: str, var_name: str) -> Dict[str, Any]:
     return parsed
 
 
+_PG_DSN_PREFIXES = ("postgresql://", "postgresql+psycopg2://")
+
+
 def _validate_engine(name: str, data: Dict[str, Any]) -> None:
     required = ["language", "executor", "executor_params"]
     missing = [f for f in required if f not in data]
@@ -89,6 +92,23 @@ def _validate_engine(name: str, data: Dict[str, Any]) -> None:
         raise EnvConfigError(f"Engine '{name}': feature_params must be an object")
     if "environments" in data and not isinstance(data["environments"], list):
         raise EnvConfigError(f"Engine '{name}': environments must be a list of names")
+    main_dsn = data.get("main_connection_string")
+    if main_dsn is not None and main_dsn != "":
+        if not isinstance(main_dsn, str):
+            raise EnvConfigError(
+                f"Engine '{name}': main_connection_string must be a string"
+            )
+        if data["executor"] != "sqlalchemy":
+            raise EnvConfigError(
+                f"Engine '{name}': main_connection_string is only supported "
+                f"for executor='sqlalchemy' (PostgreSQL)"
+            )
+        if not main_dsn.startswith(_PG_DSN_PREFIXES):
+            raise EnvConfigError(
+                f"Engine '{name}': main_connection_string must be a "
+                f"PostgreSQL DSN starting with postgresql:// or "
+                f"postgresql+psycopg2://"
+            )
 
 
 def _validate_metastore(name: str, data: Dict[str, Any]) -> None:
@@ -190,6 +210,7 @@ def load_env_query_engines(
                 feature_params=data.get("feature_params"),
                 metastore_name=data.get("metastore_name"),
                 environments=data.get("environments"),
+                main_connection_string=data.get("main_connection_string"),
             )
         except EnvConfigError as e:
             LOG.error(f"Skipping query engine from {var_name}: {e}")
@@ -215,7 +236,8 @@ def load_env_query_engines(
 #       language: postgresql
 #       executor: sqlalchemy
 #       executor_params:
-#         connection_string: "postgresql://u:${PG_PASS}@h/d"
+#         connection_string: "postgresql://u:${PG_SANDBOX_PASS}@sandbox/d"
+#       main_connection_string: "postgresql://u:${PG_MAIN_PASS}@main/d"  # optional, PG only
 #       environments: [analytics]
 #   metastores:
 #     - name: prod_pg_meta
@@ -351,6 +373,7 @@ def load_file_query_engines(
                 feature_params=entry.get("feature_params"),
                 metastore_name=entry.get("metastore_name"),
                 environments=entry.get("environments"),
+                main_connection_string=entry.get("main_connection_string"),
             )
         except EnvConfigError as e:
             LOG.error(f"Skipping query engine '{entry.get('name')}' from {path}: {e}")

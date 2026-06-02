@@ -17,6 +17,8 @@ export interface IQueryEngine {
         validator?: string;
         peer_review?: boolean;
     };
+
+    has_main_connection?: boolean;
 }
 
 export interface IQueryEngineEnvironment {

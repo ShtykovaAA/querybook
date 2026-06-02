@@ -24,7 +24,9 @@ import { IOptions } from 'lib/utils/react-select';
 import { queryCellSelector } from 'redux/dataDoc/selector';
 import { notificationServiceSelector } from 'redux/notificationService/selector';
 import { INotifier } from 'redux/notificationService/types';
+import { queryEngineByIdEnvSelector } from 'redux/queryEngine/selector';
 import { IStoreState } from 'redux/store/types';
+import { DataDocResource } from 'resource/dataDoc';
 import { AsyncButton } from 'ui/AsyncButton/AsyncButton';
 import { SoftButton } from 'ui/Button/Button';
 import { IconButton } from 'ui/Button/IconButton';
@@ -39,6 +41,7 @@ import {
     SmartForm,
     updateValue,
 } from 'ui/SmartForm/SmartForm';
+import { ToggleSwitch } from 'ui/ToggleSwitch/ToggleSwitch';
 
 interface IDataDocScheduleFormProps {
     isEditable: boolean;
@@ -121,6 +124,7 @@ interface IScheduleFormValues {
         exports: IDataDocScheduleKwargs['exports'];
         timeout_minutes?: number | null;
         max_retries?: number | null;
+        run_on_main_engine_ids?: number[];
     };
 }
 
@@ -157,6 +161,7 @@ export const DataDocScheduleForm: React.FunctionComponent<
                   notifications: [],
                   timeout_minutes: null,
                   max_retries: 0,
+                  run_on_main_engine_ids: [],
               },
           }
         : {
@@ -169,6 +174,8 @@ export const DataDocScheduleForm: React.FunctionComponent<
                           ? Math.round(kwargs.timeout_seconds / 60)
                           : null,
                   max_retries: kwargs.max_retries ?? 0,
+                  run_on_main_engine_ids:
+                      kwargs.run_on_main_engine_ids ?? [],
                   // merge notification config from `config.to_user` and `config.to` to `config.to_all`
                   notifications: kwargs.notifications.map((n) => ({
                       ...n,
@@ -228,6 +235,14 @@ export const DataDocScheduleForm: React.FunctionComponent<
                     kwargsToSend.timeout_seconds =
                         Number(values.kwargs.timeout_minutes) * 60;
                 }
+                if (
+                    values.kwargs.run_on_main_engine_ids &&
+                    values.kwargs.run_on_main_engine_ids.length > 0
+                ) {
+                    kwargsToSend.run_on_main_engine_ids = [
+                        ...new Set(values.kwargs.run_on_main_engine_ids),
+                    ].sort((a, b) => a - b);
+                }
 
                 if (isCreateForm) {
                     await onCreate(cronRepr, kwargsToSend);
@@ -269,6 +284,7 @@ export const DataDocScheduleForm: React.FunctionComponent<
                             min={0}
                             max={10}
                         />
+                        <RunOnMainSection docId={docId} />
                     </>
                 );
 
@@ -620,5 +636,92 @@ const ScheduleExportsForm: React.FC<{
                 );
             }}
         />
+    );
+};
+
+const RunOnMainSection: React.FC<{ docId: number }> = ({ docId }) => {
+    const { values, setFieldValue } = useFormikContext<IScheduleFormValues>();
+    const queryEngineById = useSelector(queryEngineByIdEnvSelector);
+
+    // Fetch the doc directly — this form is also opened from
+    // /<env>/doc_schedules/, where the doc is not pre-loaded into the
+    // Redux store, so a selector-based approach would render nothing.
+    const [engineIds, setEngineIds] = React.useState<number[]>([]);
+    React.useEffect(() => {
+        let cancelled = false;
+        DataDocResource.get(docId)
+            .then(({ data }) => {
+                if (cancelled) return;
+                const ids = new Set<number>();
+                for (const cell of data.cells ?? []) {
+                    if (cell.cell_type !== 'query') continue;
+                    const engineId = (cell.meta as { engine?: number })
+                        ?.engine;
+                    if (typeof engineId === 'number') {
+                        ids.add(engineId);
+                    }
+                }
+                setEngineIds([...ids]);
+            })
+            .catch(() => {
+                if (!cancelled) setEngineIds([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [docId]);
+
+    if (engineIds.length === 0) {
+        return null;
+    }
+
+    const selected = new Set(values.kwargs.run_on_main_engine_ids ?? []);
+
+    const toggleEngine = (engineId: number, on: boolean) => {
+        const next = new Set(selected);
+        if (on) {
+            next.add(engineId);
+        } else {
+            next.delete(engineId);
+        }
+        setFieldValue(
+            'kwargs.run_on_main_engine_ids',
+            [...next].sort((a, b) => a - b)
+        );
+    };
+
+    return (
+        <>
+            <FormSectionHeader>Execution Environment</FormSectionHeader>
+            <div className="mb16">
+                {engineIds.map((engineId) => {
+                    const engine = queryEngineById[engineId];
+                    const hasMain = Boolean(engine?.has_main_connection);
+                    const label = engine?.name ?? `Engine #${engineId}`;
+                    const help = hasMain
+                        ? 'When enabled, scheduled runs of this engine target its main_connection_string instead of the sandbox DSN.'
+                        : 'This engine has no main connection configured. Ask an admin to set main_connection_string.';
+
+                    return (
+                        <DisabledSection
+                            key={engineId}
+                            disabled={!hasMain}
+                        >
+                            <FormField
+                                label={`Run on main: ${label}`}
+                                help={help}
+                            >
+                                <ToggleSwitch
+                                    checked={selected.has(engineId)}
+                                    onChange={(on) =>
+                                        hasMain && toggleEngine(engineId, on)
+                                    }
+                                />
+                            </FormField>
+                        </DisabledSection>
+                    );
+                })}
+            </div>
+        </>
     );
 };

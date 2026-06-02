@@ -107,6 +107,14 @@ export const QueryViewEditor: React.FunctionComponent<{
                 ) : null}
             </Title>
             <Tag>{queryEngineById[queryExecution.engine_id].name}</Tag>
+            {queryExecution.use_main_connection ? (
+                <Tag
+                    className="ml8"
+                    tooltip="This execution ran on the engine's main connection"
+                >
+                    MAIN
+                </Tag>
+            ) : null}
         </div>
     ) : null;
 

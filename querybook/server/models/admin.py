@@ -103,6 +103,10 @@ class QueryEngine(CRUDMixin, Base):
     # JSON field to store additional features such as Connection checkers
     feature_params = sql.Column(sql.JSON, default={}, nullable=False)
 
+    # Optional secondary DSN. Used by scheduled runs when a cell is opted-in
+    # via TaskSchedule.kwargs.run_on_main_engine_ids. PostgreSQL only.
+    main_connection_string = sql.Column(sql.Text, nullable=True, default=None)
+
     metastore_id = sql.Column(
         sql.Integer, sql.ForeignKey("query_metastore.id", ondelete="SET NULL")
     )
@@ -127,6 +131,7 @@ class QueryEngine(CRUDMixin, Base):
             "feature_params": self.get_feature_params(),
             "executor": self.executor,
             "is_env_managed": _is_in_env_id_range(self.id),
+            "has_main_connection": bool(self.main_connection_string),
         }
 
     def to_dict_admin(self):
@@ -145,6 +150,7 @@ class QueryEngine(CRUDMixin, Base):
             "feature_params": self.get_feature_params(),
             "environments": self.environments,
             "is_env_managed": _is_in_env_id_range(self.id),
+            "main_connection_string": self.main_connection_string,
         }
 
     def get_engine_params(self):

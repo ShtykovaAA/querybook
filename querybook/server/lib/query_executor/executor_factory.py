@@ -35,15 +35,17 @@ def create_executor_from_execution(
 def _get_executor_params_and_engine(
     query_execution_id, celery_task, execution_type, session_props, session=None
 ):
-    query, statement_ranges, uid, engine_id = _get_query_execution_info(
-        query_execution_id, session=session
+    query, statement_ranges, uid, engine_id, use_main_connection = (
+        _get_query_execution_info(query_execution_id, session=session)
     )
 
     engine = admin_logic.get_query_engine_by_id(engine_id, session=session)
     if engine.deleted_at is not None:
         raise ArchivedQueryEngine("This query engine is disabled.")
 
-    client_setting = get_client_setting_from_engine(engine, uid, session=session)
+    client_setting = get_client_setting_from_engine(
+        engine, uid, use_main_connection=use_main_connection, session=session
+    )
 
     if session_props:
         client_setting["session_props"] = session_props
@@ -62,18 +64,31 @@ def _get_executor_params_and_engine(
 
 
 @with_session
-def get_client_setting_from_engine(engine, uid=None, session=None) -> Dict:
+def get_client_setting_from_engine(
+    engine, uid=None, use_main_connection=False, session=None
+) -> Dict:
     """Compute the settings passed to the query engine.
        Both engine and user must be attached to a sqlalchemy session.
 
     Args:
         engine (QueryEngine): Corresponds to the DB QueryEngine
         uid (int, optional): Optional User id executed the query. Defaults to None.
+        use_main_connection (bool): If True, swap connection_string with
+            engine.main_connection_string. Schedule layer sets this when a
+            cell is opted into the main DSN. Raises if main is not configured.
 
     Returns:
         Dict: Dictionary of Kwargs send to the query engine client
     """
     executor_params = {**engine.get_engine_params()}
+    if use_main_connection:
+        main_dsn = getattr(engine, "main_connection_string", None)
+        if not main_dsn:
+            raise InvalidQueryExecution(
+                f"Engine '{engine.name}' is marked to run on main, but its "
+                f"main connection string is not configured."
+            )
+        executor_params["connection_string"] = main_dsn
     if uid is not None:
         user = user_logic.get_user_by_id(uid, session=session)
         proxy_user = user.username
@@ -102,9 +117,10 @@ def _get_query_execution_info(query_execution_id, session=None):
     statement_ranges = get_statement_ranges(query)
     uid = query_execution.uid
     engine_id = query_execution.engine_id
+    use_main_connection = bool(query_execution.use_main_connection)
 
     _assert_safe_query(query, engine_id, session=session)
-    return query, statement_ranges, uid, engine_id
+    return query, statement_ranges, uid, engine_id, use_main_connection
 
 
 @with_session

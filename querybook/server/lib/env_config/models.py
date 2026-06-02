@@ -87,6 +87,7 @@ class EnvQueryEngine:
         feature_params: Optional[Dict[str, Any]] = None,
         metastore_name: Optional[str] = None,
         environments: Optional[List[str]] = None,
+        main_connection_string: Optional[str] = None,
     ):
         self.id = compute_env_id(f"engine:{name}")
         self.name = name
@@ -97,6 +98,7 @@ class EnvQueryEngine:
         self.feature_params = feature_params or {}
         self._metastore_name = metastore_name
         self._environment_names = environments or []
+        self.main_connection_string = main_connection_string or None
         self.created_at = datetime.utcnow()
         self.updated_at = self.created_at
         self.deleted_at = None
@@ -178,6 +180,7 @@ class EnvQueryEngine:
             "feature_params": self.get_feature_params(),
             "executor": self.executor,
             "is_env_managed": True,
+            "has_main_connection": bool(self.main_connection_string),
         }
 
     def to_dict_admin(self) -> Dict[str, Any]:
@@ -198,4 +201,5 @@ class EnvQueryEngine:
             "feature_params": self.get_feature_params(),
             "environments": self.environments,
             "is_env_managed": True,
+            "main_connection_string": self.main_connection_string,
         }

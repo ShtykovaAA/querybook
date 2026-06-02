@@ -46,6 +46,13 @@ class QueryExecution(Base):
         index=True,
     )
 
+    # Set when this execution was routed to the engine's main_connection_string
+    # via TaskSchedule.kwargs.run_on_main_engine_ids. Persisted so that history
+    # always shows where the QE actually ran.
+    use_main_connection = sql.Column(
+        sql.Boolean, nullable=False, default=False, server_default=sql.false()
+    )
+
     owner = relationship("User", uselist=False)
     engine = relationship(
         "QueryEngine",
@@ -83,6 +90,7 @@ class QueryExecution(Base):
             "engine_id": self.engine_id,
             "uid": self.uid,
             "task_run_record_id": self.task_run_record_id,
+            "use_main_connection": self.use_main_connection,
         }
 
         if with_statement:

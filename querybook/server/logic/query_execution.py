@@ -113,6 +113,7 @@ def create_query_execution(
     task_id=None,
     status=QueryExecutionStatus.INITIALIZED,
     task_run_record_id=None,
+    use_main_connection=False,
     commit=True,
     session=None,
 ):
@@ -123,6 +124,7 @@ def create_query_execution(
         task_id=task_id,
         status=status,
         task_run_record_id=task_run_record_id,
+        use_main_connection=bool(use_main_connection),
     )
     session.add(query_execution)
     if commit:
