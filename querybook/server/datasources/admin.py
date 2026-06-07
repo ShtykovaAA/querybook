@@ -1,3 +1,5 @@
+import re
+
 from flask_login import current_user
 
 from app.datasource import register, admin_only, api_assert
@@ -116,6 +118,41 @@ def _mask_env_managed_metastore(metastore_dict):
             "acl_control": {},
         }
     return metastore_dict
+
+
+SECRET_MASK = "***"
+
+
+# Settings whose NAME signals a credential. Match is substring-based so
+# variants like FLASK_SECRET_KEY, AWS_SECRET_ACCESS_KEY, GITHUB_CRYPTO_SECRET
+# are all caught.
+_SENSITIVE_SETTING_MARKERS = (
+    "SECRET",
+    "PASSWORD",
+    "TOKEN",
+    "_CONN",         # DATABASE_CONN, EMAILER_CONN, LDAP_CONN
+    "CREDS",         # GOOGLE_CREDS
+    "_KEY",          # *_KEY, including AWS_ACCESS_KEY_ID
+    "AI_ASSISTANT_CONFIG",
+    "VECTOR_STORE_CONFIG",
+    "EMBEDDINGS_CONFIG",
+    "FLASK_CACHE_CONFIG",  # may carry a Redis URL with credentials
+)
+
+# DSN-shaped strings with embedded user:pass — e.g. redis://:pw@host,
+# postgresql+psycopg2://user:pw@host. Caught even when the setting name
+# itself doesn't look sensitive.
+_DSN_WITH_EMBEDDED_CREDS = re.compile(r"://[^/\s@]*:[^/@\s]+@")
+
+
+def _mask_setting(key, value):
+    if value is None or value == "":
+        return value
+    if any(marker in key for marker in _SENSITIVE_SETTING_MARKERS):
+        return SECRET_MASK
+    if isinstance(value, str) and _DSN_WITH_EMBEDDED_CREDS.search(value):
+        return SECRET_MASK
+    return value
 
 
 @register(
@@ -716,7 +753,7 @@ def get_admin_audit_logs(
 @admin_only
 def get_admin_config():
     return {
-        key: getattr(QuerybookSettings, key)
+        key: _mask_setting(key, getattr(QuerybookSettings, key))
         for key in dir(QuerybookSettings)
         if not key.startswith("__")
     }
